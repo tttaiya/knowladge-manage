@@ -146,8 +146,6 @@ public class KnowledgeBaseService {
         if (req.getChunkSize() != null) existing.setChunkSize(req.getChunkSize());
         if (req.getChunkOverlap() != null) existing.setChunkOverlap(req.getChunkOverlap());
         if (req.getSeparatorsJson() != null) existing.setSeparatorsJson(normalizeSeparatorsJson(req.getSeparatorsJson()));
-        if (req.getCreatedByUserId() != null) existing.setCreatedByUserId(req.getCreatedByUserId());
-        if (req.getCreatedByName() != null) existing.setCreatedByName(req.getCreatedByName());
 
         // 策略变更：strategy_version 单调递增；非策略变更：保持原值
         if (strategyChanged) {
