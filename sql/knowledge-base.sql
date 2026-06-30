@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS km_knowledge_base (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  name VARCHAR(128) NOT NULL,
+  retrieval_strategy VARCHAR(64) NOT NULL DEFAULT 'VECTOR_RERANK',
+  is_deleted TINYINT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_kb_deleted (is_deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识库基础信息表';
+
+CREATE TABLE IF NOT EXISTS km_document_tag (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  doc_id BIGINT NOT NULL,
+  tag_name VARCHAR(64) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_doc_tag_doc (doc_id),
+  KEY idx_doc_tag_name (tag_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档标签表';

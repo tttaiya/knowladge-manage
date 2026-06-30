@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.config.ConfigMapper">
+
+    <!-- R11：字段名严格对齐 km_system_config 表（config_key / config_value / description / updated_at） -->
+
+    <select id="selectValue" resultType="java.lang.String">
+        SELECT config_value
+          FROM km_system_config
+         WHERE config_key = #{configKey}
+         LIMIT 1
+    </select>
+
+    <select id="selectAllAsMap" resultType="java.util.LinkedHashMap">
+        SELECT config_key AS configKey, config_value AS configValue
+          FROM km_system_config
+    </select>
+
+    <update id="updateConfigValue">
+        UPDATE km_system_config
+           SET config_value = #{configValue},
+               updated_at = NOW()
+         WHERE config_key = #{configKey}
+    </update>
+
+    <!-- 加载 embedding 配置（4 字段） -->
+    <select id="loadEmbeddingConfig" resultType="com.km.admin.config.dto.EmbeddingConfigDTO">
+        SELECT
+            MAX(CASE WHEN config_key = 'embedding.model'      THEN config_value END) AS model,
+            MAX(CASE WHEN config_key = 'embedding.api_base'   THEN config_value END) AS apiBase,
+            MAX(CASE WHEN config_key = 'embedding.api_key'    THEN config_value END) AS apiKey,
+            MAX(CASE WHEN config_key = 'embedding.dimension'  THEN config_value END) AS dimension
+          FROM km_system_config
+         WHERE config_key IN ('embedding.model','embedding.api_base','embedding.api_key','embedding.dimension')
+    </select>
+
+    <!-- 加载 rerank 配置（5 字段） -->
+    <select id="loadRerankConfig" resultType="com.km.admin.config.dto.RerankConfigDTO">
+        SELECT
+            MAX(CASE WHEN config_key = 'rerank.model'      THEN config_value END) AS model,
+            MAX(CASE WHEN config_key = 'rerank.api_base'   THEN config_value END) AS apiBase,
+            MAX(CASE WHEN config_key = 'rerank.api_key'    THEN config_value END) AS apiKey,
+            MAX(CASE WHEN config_key = 'rerank.top_n'      THEN config_value END) AS topN,
+            MAX(CASE WHEN config_key = 'rerank.threshold'  THEN config_value END) AS threshold
+          FROM km_system_config
+         WHERE config_key IN ('rerank.model','rerank.api_base','rerank.api_key','rerank.top_n','rerank.threshold')
+    </select>
+
+    <!-- 加载 parser 配置（4 字段） -->
+    <select id="loadParserConfig" resultType="com.km.admin.config.dto.ParserConfigDTO">
+        SELECT
+            MAX(CASE WHEN config_key = 'parser.paddleocr_enabled'    THEN config_value END) AS paddleocrEnabled,
+            MAX(CASE WHEN config_key = 'parser.max_concurrent_tasks' THEN config_value END) AS maxConcurrentTasks,
+            MAX(CASE WHEN config_key = 'parser.max_retry_count'      THEN config_value END) AS maxRetryCount,
+            MAX(CASE WHEN config_key = 'parser.timeout_seconds'      THEN config_value END) AS timeoutSeconds
+          FROM km_system_config
+         WHERE config_key IN ('parser.paddleocr_enabled','parser.max_concurrent_tasks','parser.max_retry_count','parser.timeout_seconds')
+    </select>
+</mapper>

@@ -1,0 +1,20 @@
+第一章 系统概述
+本系统是面向电力行业的智能知识管理系统，用于文档上传、文档解析、OCR识别、文本切片和知识检索。
+
+一、项目背景
+电力技术监督工作需要处理大量规程规范、技术报告、检查记录和审计资料。传统人工查找效率较低，因此需要构建统一的知识库。
+
+1.1 文档处理流程
+用户上传文档后，系统会进入处理管线，依次执行解析中、切片中、向量化中、待审核等步骤。只有审核通过后的文档才进入 READY 状态，并参与后续问答和报告生成。
+
+1.1.1 OCR识别流程
+当上传的是图片或扫描版 PDF 时，系统无法直接提取文本，需要调用 PaddleOCR 识别页面中的中文文字。识别结果会被清洗并转换成标准文本块。
+
+第二章 切片策略
+系统支持 fixed 固定长度切片和 heading 标题层级切片。fixed 模式根据 chunkSize、overlap 和 separator 生成切片；heading 模式会识别第一章、一、1.1、1.1.1 等标题结构。
+
+一、测试目标
+本文件用于测试 /internal/ai/process-document、/internal/ai/parse 和 /internal/ai/chunk 接口，验证 parsedText、blocks、chunks、chapterPath、pageNo、chunkType、charCount、chunkIndex 等字段是否正常返回。
+
+第三章 异常处理
+如果文件路径不存在、文件格式不支持或 OCR 依赖未安装，接口应返回 success=false，并给出 errorMessage，方便 Java Worker 记录失败原因。

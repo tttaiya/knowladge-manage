@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.review.mapper.ChunkEditLogMapper">
+
+    <resultMap id="ChunkEditLogResultMap" type="com.km.admin.review.entity.ChunkEditLog">
+        <id property="id" column="id"/>
+        <result property="chunkId" column="chunk_id"/>
+        <result property="beforeContent" column="before_content"/>
+        <result property="afterContent" column="after_content"/>
+        <result property="action" column="action"/>
+        <result property="operatorUserId" column="operator_user_id"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="selectByChunkId" resultMap="ChunkEditLogResultMap">
+        select id,
+               chunk_id,
+               before_content,
+               after_content,
+               action,
+               operator_user_id,
+               operator_name,
+               created_at
+        from km_chunk_edit_log
+        where chunk_id = #{chunkId}
+        order by created_at asc
+    </select>
+
+    <insert id="insert" parameterType="com.km.admin.review.entity.ChunkEditLog">
+        insert into km_chunk_edit_log (chunk_id, before_content, after_content, action, operator_user_id, operator_name, created_at)
+        values (#{chunkId}, #{beforeContent}, #{afterContent}, #{action}, coalesce(#{operatorUserId}, 0), #{operatorName}, #{createdAt})
+    </insert>
+</mapper>
+

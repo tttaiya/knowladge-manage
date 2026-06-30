@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.document.mapper.DocumentManageMapper">
+
+    <resultMap id="KmDocumentMap" type="com.km.admin.document.entity.KmDocument">
+        <id     property="id"               column="id"/>
+        <result property="kbId"             column="kb_id"/>
+        <result property="originalName"     column="file_name"/>
+        <result property="filePath"         column="object_key"/>
+        <result property="mimeType"         column="mime_type"/>
+        <result property="fileSize"         column="file_size"/>
+        <result property="fileHash"         column="file_hash"/>
+        <result property="extension"        column="extension"/>
+        <result property="status"           column="document_status"/>
+        <result property="errorStage"       column="error_stage"/>
+        <result property="errorMessage"     column="error_message"/>
+        <result property="chunkCount"       column="chunk_count"/>
+        <result property="retryCount"       column="retry_count"/>
+        <result property="uploaderUserId"   column="user_id"/>
+        <result property="uploaderName"     column="uploader_name"/>
+        <result property="currentVersionNo" column="current_version_no"/>
+        <result property="nextVersionNo"    column="next_version_no"/>
+        <result property="isDeleted"        column="is_deleted"/>
+        <result property="deletedAt"        column="deleted_at"/>
+        <result property="createdAt"        column="created_at"/>
+        <result property="updatedAt"        column="updated_at"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, kb_id, user_id, file_name, object_key, mime_type, file_size, file_hash,
+        extension, document_status, error_stage, error_message, chunk_count, retry_count,
+        uploader_name, current_version_no, next_version_no, is_deleted, deleted_at,
+        created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="com.km.admin.document.entity.KmDocument"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO km_document (
+            kb_id, user_id, file_name, object_key, mime_type, file_size, file_hash,
+            extension, document_status, uploader_name, current_version_no, next_version_no,
+            is_deleted, created_at
+        ) VALUES (
+            #{kbId}, #{uploaderUserId}, #{originalName}, #{filePath}, #{mimeType}, #{fileSize}, #{fileHash},
+            #{extension}, #{status}, #{uploaderName}, 0, 1,
+            0, NOW()
+        )
+    </insert>
+
+    <select id="selectById" resultMap="KmDocumentMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM km_document
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByKbId" resultMap="KmDocumentMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM km_document
+        <where>
+            kb_id = #{kbId}
+            AND is_deleted = #{isDeleted}
+            <if test="status != null and status != ''">
+                AND document_status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND file_name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+        </where>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countByKbId" resultType="long">
+        SELECT COUNT(1)
+        FROM km_document
+        <where>
+            kb_id = #{kbId}
+            AND is_deleted = #{isDeleted}
+            <if test="status != null and status != ''">
+                AND document_status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND file_name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+        </where>
+    </select>
+
+    <update id="updateTagsRelatedTimestamp">
+        UPDATE km_document SET updated_at = NOW() WHERE id = #{id}
+    </update>
+
+    <!--
+        R1：逻辑删除不改 document_status，只设 is_deleted=1 + deleted_at
+        R8：purge_at 暂未启用，Scheduler 基于 deleted_at 兜底
+    -->
+    <update id="logicDelete">
+        UPDATE km_document
+        SET is_deleted = 1,
+            deleted_at = #{deletedAt}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <update id="batchLogicDelete">
+        UPDATE km_document
+        SET is_deleted = 1,
+            deleted_at = #{deletedAt}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND is_deleted = 0
+    </update>
+
+    <!--
+        R1/R3：恢复时只清 is_deleted/deleted_at，document_status 保持原值
+    -->
+    <update id="restore">
+        UPDATE km_document
+        SET is_deleted = 0,
+            deleted_at = NULL
+        WHERE id = #{id}
+          AND is_deleted = 1
+    </update>
+
+    <!--
+        由 Worker PURGE_RESULT(success=true) 链路调用，物理删除主记录
+    -->
+    <delete id="permanentDelete">
+        DELETE FROM km_document WHERE id = #{id}
+    </delete>
+
+    <select id="selectExpiredRecycle" resultMap="KmDocumentMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM km_document
+        WHERE is_deleted = 1
+          AND deleted_at &lt;= #{now}
+        ORDER BY id
+        LIMIT 100
+    </select>
+
+    <select id="selectLatestTaskByDocId" resultType="java.util.Map">
+        SELECT id, task_type, task_status, progress, error_stage, error_message,
+               retry_count, trigger_source, created_at, started_at, finished_at
+        FROM km_document_process_task
+        WHERE doc_id = #{docId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <update id="updateUploaderSnapshot">
+        UPDATE km_document
+        SET user_id = #{uploaderUserId},
+            uploader_name = #{uploaderName},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateFileMetadata">
+        UPDATE km_document
+        SET mime_type = #{mimeType},
+            file_size = #{fileSize},
+            file_hash = #{fileHash},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+</mapper>

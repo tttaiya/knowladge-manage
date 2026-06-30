@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.review.mapper.DocumentChunkMapper">
+
+    <resultMap id="ReviewChunkResultMap" type="com.km.admin.review.vo.ReviewChunkVO">
+        <id property="chunkId" column="chunk_id"/>
+        <result property="chunkIndex" column="chunk_index"/>
+        <result property="chapterPath" column="chapter_path"/>
+        <result property="pageNo" column="page_no"/>
+        <result property="chunkType" column="chunk_type"/>
+        <result property="content" column="content"/>
+        <result property="charCount" column="char_count"/>
+        <result property="vectorId" column="vector_id"/>
+        <result property="vectorStatus" column="vector_status"/>
+        <result property="isEdited" column="is_edited"/>
+    </resultMap>
+
+    <select id="selectReviewChunksByDocId" resultMap="ReviewChunkResultMap">
+        select id as chunk_id,
+               chunk_index,
+               chapter_path,
+               page_no,
+               chunk_type,
+               content,
+               char_count,
+               vector_id,
+               vector_status,
+               coalesce(is_edited, 0) as is_edited
+        from km_document_chunk
+        where doc_id = #{docId}
+          and is_active = 1
+        order by chunk_index asc
+    </select>
+
+    <select id="selectChunkForEdit" resultType="java.util.Map">
+        select c.id as chunkId,
+               c.doc_id as docId,
+               d.kb_id as kbId,
+               c.content
+        from km_document_chunk c
+        join km_document d on d.id = c.doc_id
+        where c.id = #{chunkId}
+          and c.is_active = 1
+    </select>
+
+    <update id="updateChunkContent">
+        update km_document_chunk
+        set content = #{content},
+            char_count = #{charCount},
+            is_edited = 1,
+            vector_status = 'PENDING',
+            updated_at = now()
+        where id = #{chunkId}
+          and is_active = 1
+    </update>
+</mapper>
+

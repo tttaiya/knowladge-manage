@@ -1,0 +1,46 @@
+# =========================================================================
+# Nacos gateway-service 配置备份
+# =========================================================================
+# R15 修订：Gateway 当前 pom.xml 只引入了 spring-cloud-starter-alibaba-nacos-discovery，
+# 没有引入 spring-cloud-starter-alibaba-nacos-config，也没有 bootstrap.yml 或
+# spring.config.import。所以本文件不会被运行中的 Gateway 自动加载。
+#
+# 当前生效来源：
+#   backend-java/gateway-service/src/main/resources/application.yml
+#
+# 维护规则：每次修改 application.yml 都要同步更新本文件作备份，
+# 未来如果想启用 Nacos 配置中心，需要：
+#   1) 在 gateway-service/pom.xml 加 spring-cloud-starter-alibaba-nacos-config
+#   2) 加 bootstrap.yml 并配置 spring.config.import=nacos:gateway-service.yml
+#   3) dataId = gateway-service.yml, group = DEFAULT_GROUP
+# =========================================================================
+spring:
+  cloud:
+    gateway:
+      routes:
+        # 知识管理业务路由（admin-service）
+        - id: km-admin
+          uri: http://km-admin-service:9101
+          predicates:
+            - Path=/api/v1/knowledge-bases/**,
+                  /api/v1/documents/**,
+                  /api/v1/reviews/**,
+                  /api/v1/configs/**,
+                  /api/v1/stats/**,
+                  /api/v1/recycle-bin/**,
+                  /internal/km/**
+        # 前台与跨组检索（search-service，独立保留）
+        - id: km-search
+          uri: http://km-search-service:9103
+          predicates:
+            - Path=/api/v1/retrieval/**,
+                  /internal/v1/retrieval/**
+        # 智慧问答（super-biz-agent）
+        - id: super-biz-agent
+          uri: http://super-biz-agent-service:9900
+          predicates:
+            - Path=/,/static/**,/api/auth/**,/api/admin/**,/api/conversations/**,/api/chat,/api/chat/**,/api/chat_stream,/api/messages/**
+
+# R9 + 必改 1：UserContextGatewayFilter 调用 /api/auth/me 用
+super-biz-agent:
+  base-url: http://super-biz-agent-service:9900

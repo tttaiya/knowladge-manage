@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 智能OnCall助手</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <h1>管理后台</h1>
+            <a href="/">返回问答</a>
+            <button data-admin-tab="dashboard">运营总览</button>
+            <button data-admin-tab="models">模型配置</button>
+        </aside>
+        <main class="admin-main">
+            <div class="admin-user" id="adminUser"></div>
+            <section id="dashboardPanel" class="admin-panel"></section>
+            <section id="modelPanel" class="admin-panel"></section>
+        </main>
+    </div>
+    <script src="/static/admin.js"></script>
+</body>
+</html>

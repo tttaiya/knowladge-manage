@@ -1,0 +1,58 @@
+{
+  "vhosts": [
+    {"name": "/km"}
+  ],
+  "users": [
+    {
+      "name": "km",
+      "password": "km123456",
+      "tags": "administrator"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "km",
+      "vhost": "/km",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {"name": "km.exchange", "vhost": "/km", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}},
+    {"name": "km.dlx", "vhost": "/km", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}}
+  ],
+  "queues": [
+    {"name": "km.doc.process", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "km.dlx", "x-dead-letter-routing-key": "km.doc.process.dlq"}},
+    {"name": "km.doc.reprocess", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "km.dlx", "x-dead-letter-routing-key": "km.doc.reprocess.dlq"}},
+    {"name": "km.chunk.reembed", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "km.dlx", "x-dead-letter-routing-key": "km.chunk.reembed.dlq"}},
+    {"name": "km.doc.purge", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "km.dlx", "x-dead-letter-routing-key": "km.doc.purge.dlq"}},
+    {"name": "km.task.result", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "km.dlx", "x-dead-letter-routing-key": "km.task.result.dlq"}},
+    {"name": "km.config.changed.worker", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "km.dlx", "x-dead-letter-routing-key": "km.config.changed.worker.dlq"}},
+    {"name": "km.config.changed.worker.dlq", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "km.doc.process.retry", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-message-ttl": 30000, "x-dead-letter-exchange": "km.exchange", "x-dead-letter-routing-key": "km.doc.process"}},
+    {"name": "km.doc.reprocess.retry", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {"x-message-ttl": 30000, "x-dead-letter-exchange": "km.exchange", "x-dead-letter-routing-key": "km.doc.reprocess"}},
+    {"name": "km.doc.process.dlq", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "km.doc.reprocess.dlq", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "km.chunk.reembed.dlq", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "km.doc.purge.dlq", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "km.task.result.dlq", "vhost": "/km", "durable": true, "auto_delete": false, "arguments": {}}
+  ],
+  "bindings": [
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.doc.process", "destination_type": "queue", "routing_key": "km.doc.process", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.doc.reprocess", "destination_type": "queue", "routing_key": "km.doc.reprocess", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.chunk.reembed", "destination_type": "queue", "routing_key": "km.chunk.reembed", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.doc.purge", "destination_type": "queue", "routing_key": "km.doc.purge", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.task.result", "destination_type": "queue", "routing_key": "km.task.result", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.config.changed.worker", "destination_type": "queue", "routing_key": "km.config.changed", "arguments": {}},
+    {"source": "km.dlx", "vhost": "/km", "destination": "km.config.changed.worker.dlq", "destination_type": "queue", "routing_key": "km.config.changed.worker.dlq", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.doc.process.retry", "destination_type": "queue", "routing_key": "km.doc.process.retry", "arguments": {}},
+    {"source": "km.exchange", "vhost": "/km", "destination": "km.doc.reprocess.retry", "destination_type": "queue", "routing_key": "km.doc.reprocess.retry", "arguments": {}},
+    {"source": "km.dlx", "vhost": "/km", "destination": "km.doc.process.dlq", "destination_type": "queue", "routing_key": "km.doc.process.dlq", "arguments": {}},
+    {"source": "km.dlx", "vhost": "/km", "destination": "km.doc.reprocess.dlq", "destination_type": "queue", "routing_key": "km.doc.reprocess.dlq", "arguments": {}},
+    {"source": "km.dlx", "vhost": "/km", "destination": "km.chunk.reembed.dlq", "destination_type": "queue", "routing_key": "km.chunk.reembed.dlq", "arguments": {}},
+    {"source": "km.dlx", "vhost": "/km", "destination": "km.doc.purge.dlq", "destination_type": "queue", "routing_key": "km.doc.purge.dlq", "arguments": {}},
+    {"source": "km.dlx", "vhost": "/km", "destination": "km.task.result.dlq", "destination_type": "queue", "routing_key": "km.task.result.dlq", "arguments": {}}
+  ]
+}
+

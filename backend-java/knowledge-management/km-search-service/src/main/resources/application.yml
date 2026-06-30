@@ -1,0 +1,38 @@
+server:
+  port: 9103
+
+spring:
+  application:
+    name: km-search-service
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://mysql:3306/km?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USER:km}
+    password: ${MYSQL_PASSWORD:km123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+km:
+  internal-token: ${INTERNAL_TOKEN:demo-internal-token}
+  ai:
+    base-url: ${KM_AI_BASE_URL:http://fastapi-ai-service:8000}
+    retrieval-path: ${KM_AI_RETRIEVAL_PATH:/internal/ai/retrieval/search}
+    internal-token: ${INTERNAL_TOKEN:demo-internal-token}
+    connect-timeout-ms: 5000
+    read-timeout-ms: 60000
+  retrieval:
+    default-mode: VECTOR_RERANK
+    default-top-k: 5
+    default-similarity-threshold: 0.30
+    default-rerank-top-n: 3
+    default-rerank-threshold: 0.50
+    max-top-k: 50
+    max-candidate-k: 200

@@ -1,0 +1,41 @@
+CREATE TABLE IF NOT EXISTS km_document (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  kb_id BIGINT NOT NULL,
+  user_id BIGINT DEFAULT NULL,
+  file_name VARCHAR(255) NOT NULL,
+  object_key VARCHAR(512) DEFAULT NULL,
+  extension VARCHAR(32) DEFAULT NULL,
+  document_status VARCHAR(32) NOT NULL DEFAULT 'UPLOADED',
+  error_stage VARCHAR(32) DEFAULT NULL,
+  error_message TEXT DEFAULT NULL,
+  current_version_no BIGINT NOT NULL DEFAULT 0,
+  next_version_no BIGINT NOT NULL DEFAULT 1,
+  is_deleted TINYINT NOT NULL DEFAULT 0,
+  deleted_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_doc_kb_status (kb_id, document_status),
+  KEY idx_doc_deleted (is_deleted, deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识管理文档表';
+
+CREATE TABLE IF NOT EXISTS km_document_chunk (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  doc_id BIGINT NOT NULL,
+  version_no BIGINT NOT NULL DEFAULT 1,
+  chunk_index INT NOT NULL DEFAULT 0,
+  content TEXT NOT NULL,
+  chapter_path VARCHAR(512) DEFAULT NULL,
+  page_no INT DEFAULT NULL,
+  chunk_type VARCHAR(32) DEFAULT NULL,
+  char_count INT DEFAULT NULL,
+  vector_id VARCHAR(128) DEFAULT NULL,
+  vector_status VARCHAR(32) DEFAULT 'READY',
+  is_active TINYINT NOT NULL DEFAULT 1,
+  is_edited TINYINT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_chunk_doc_version (doc_id, version_no, is_active),
+  KEY idx_chunk_vector (vector_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档切片表';

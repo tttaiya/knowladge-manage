@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能OnCall助手</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <!-- Markdown 渲染库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <!-- 代码高亮库（可选） -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/es/highlight.min.js"></script>
+</head>
+<body>
+    <section class="login-screen" id="loginScreen">
+        <div class="login-panel">
+            <div>
+                <h1>智能OnCall助手</h1>
+                <p>登录后开始对话</p>
+            </div>
+            <div class="login-form">
+                <input class="login-input" id="usernameInput" placeholder="用户名" autocomplete="username">
+                <input class="login-input" id="passwordInput" placeholder="密码" type="password" autocomplete="current-password">
+                <button class="login-primary" id="loginBtn">登录</button>
+                <button class="login-secondary" id="registerBtn">注册并登录</button>
+                <div class="login-message" id="authUser"></div>
+            </div>
+        </div>
+    </section>
+
+    <div class="app-layout authed-only" id="appLayout" style="display: none;">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2 class="sidebar-title">智能OnCall助手</h2>
+            </div>
+            
+            <div class="sidebar-content">
+                <button class="new-chat-btn" id="newChatBtn">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span>新建对话</span>
+                </button>
+                
+                <div class="chat-history-section">
+                    <div class="history-header">
+                        <span>近期对话</span>
+                    </div>
+                    <div class="chat-history-list" id="chatHistoryList">
+                        <!-- 历史对话列表将在这里动态生成 -->
+                    </div>
+                </div>
+
+                <!--
+                    R18: 知识管理 / 报告生成业务入口
+                    - 知识管理走 /knowledge/ 路径，Nginx 反代到 knowledge-web:80 容器
+                    - 报告生成是预留位（报告组后续合并），当前指向 /reports/ 占位
+                -->
+                <div class="sidebar-business-section">
+                    <a class="sidebar-btn" href="/knowledge/bases">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 4h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4V4z" stroke="currentColor" stroke-width="1.6"/>
+                            <path d="M8 8h6M8 12h6M8 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                        </svg>
+                        <span>知识管理</span>
+                    </a>
+                    <a class="sidebar-btn" href="/reports/">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M5 3h10l4 4v14a1 1 0 0 1-1 1H5V3z" stroke="currentColor" stroke-width="1.6"/>
+                            <path d="M9 11h6M9 15h6M9 19h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                        </svg>
+                        <span>报告生成</span>
+                    </a>
+                </div>
+
+            </div>
+            <button class="logout-btn" id="logoutBtn">退出登录</button>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <div class="chat-container">
+                <div class="welcome-greeting" id="welcomeGreeting">
+                    <p>你好！我是智能Oncall小助手</p>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                </div>
+                
+                <div class="chat-input-container">
+                    <div class="input-group-wrapper">
+                        <div class="input-wrapper">
+                            <textarea id="messageInput" placeholder="问问智能OnCall助手" maxlength="1000" class="message-input" rows="1"></textarea>
+                            <div class="input-bottom-bar">
+                                <div class="right-actions">
+                                    <button class="send-btn-circle" id="sendButton" title="发送">
+                                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 加载遮罩层 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">智能运维分析中，请稍候...</div>
+            <div class="loading-subtext">后端正在处理，请耐心等待</div>
+        </div>
+    </div>
+
+    <div class="citation-modal" id="citationModal" hidden>
+        <div class="citation-modal-backdrop" data-close-citation></div>
+        <div class="citation-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="citationModalTitle">
+            <button class="citation-modal-close" id="citationModalClose" type="button" aria-label="关闭">
+                <span aria-hidden="true">×</span>
+            </button>
+            <div class="citation-modal-header">
+                <span class="citation-modal-index" id="citationModalIndex">[1]</span>
+                <h3 id="citationModalTitle">引用详情</h3>
+            </div>
+            <div class="citation-modal-grid">
+                <div class="citation-modal-field">
+                    <span class="citation-modal-label">来源文档</span>
+                    <strong id="citationModalDoc">-</strong>
+                </div>
+                <div class="citation-modal-field">
+                    <span class="citation-modal-label">所属章节</span>
+                    <strong id="citationModalSection">-</strong>
+                </div>
+                <div class="citation-modal-field">
+                    <span class="citation-modal-label">相似度分数</span>
+                    <strong id="citationModalVectorScore">-</strong>
+                </div>
+                <div class="citation-modal-field">
+                    <span class="citation-modal-label">重排序分数</span>
+                    <strong id="citationModalRerankScore">-</strong>
+                </div>
+            </div>
+            <div class="citation-modal-content-block">
+                <span class="citation-modal-label">对应切片内容</span>
+                <pre class="citation-modal-content" id="citationModalContent"></pre>
+            </div>
+            <a class="citation-download-btn" id="citationModalDownload" href="#" target="_blank" rel="noopener noreferrer">下载原文</a>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+km:
+  max-concurrent-tasks: 2
+  admin-base-url: http://km-admin-service:9101
+  ai-base-url: http://fastapi-ai-service:8000
+

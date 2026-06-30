@@ -1,0 +1,46 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+    gateway:
+      routes:
+        # 知识管理业务路由（admin-service）
+        # R15：实际生效来源是本文件，Nacos gateway-service.yml 仅作备份
+        - id: km-admin
+          uri: ${KM_ADMIN_URI:http://km-admin-service:9101}
+          predicates:
+            - Path=/api/v1/knowledge-bases/**,
+                  /api/v1/documents/**,
+                  /api/v1/reviews/**,
+                  /api/v1/configs/**,
+                  /api/v1/stats/**,
+                  /api/v1/recycle-bin/**,
+                  /internal/km/**
+        # 前台与跨组检索（search-service，独立保留）
+        - id: km-search
+          uri: ${KM_SEARCH_URI:http://km-search-service:9103}
+          predicates:
+            - Path=/api/v1/retrieval/**,
+                  /internal/v1/retrieval/**
+        # 智慧问答（super-biz-agent）
+        - id: super-biz-agent
+          uri: ${SUPER_BIZ_AGENT_URI:http://super-biz-agent-service:9900}
+          predicates:
+            - Path=/,/static/**,/api/auth/**,/api/admin/**,/api/conversations/**,/api/chat,/api/chat/**,/api/chat_stream,/api/messages/**
+
+# R9 + 必改 1：用户上下文过滤器
+# super-biz-agent 内部 base URL，供 UserContextGatewayFilter 调用 /api/auth/me
+super-biz-agent:
+  base-url: ${SUPER_BIZ_AGENT_URI:http://super-biz-agent-service:9900}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

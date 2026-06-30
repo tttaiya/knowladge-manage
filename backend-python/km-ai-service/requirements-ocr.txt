@@ -1,0 +1,5 @@
+# OCR 比较大，先跑普通解析可以不装；要测图片/扫描 PDF 再装。
+# PaddleOCR 3.x + PaddlePaddle 3.x currently fails on this Windows CPU
+# environment. Keep the tested 2.x API/runtime combination for Python 3.10.
+paddleocr==2.9.1
+paddlepaddle==2.6.2

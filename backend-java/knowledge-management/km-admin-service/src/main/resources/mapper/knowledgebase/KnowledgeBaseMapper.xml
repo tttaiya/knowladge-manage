@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.knowledgebase.mapper.KnowledgeBaseMapper">
+
+  <!-- 通用 resultMap（F2 v1.0 5.3） -->
+  <resultMap id="KnowledgeBaseMap" type="com.km.admin.knowledgebase.entity.KnowledgeBase">
+    <id     property="id"                column="id"/>
+    <result property="name"              column="name"/>
+    <result property="description"       column="description"/>
+    <result property="category"          column="category"/>
+    <result property="retrievalStrategy" column="retrieval_strategy"/>
+    <result property="chunkStrategy"     column="chunk_strategy"/>
+    <result property="chunkSize"         column="chunk_size"/>
+    <result property="chunkOverlap"      column="chunk_overlap"/>
+    <result property="separatorsJson"    column="separators_json"/>
+    <result property="documentCount"     column="document_count"/>
+    <result property="createdByUserId"   column="created_by_user_id"/>
+    <result property="createdByName"     column="created_by_name"/>
+    <result property="strategyVersion"   column="strategy_version"/>
+    <result property="isDeleted"         column="is_deleted"/>
+    <result property="deletedAt"         column="deleted_at"/>
+    <result property="createdAt"         column="created_at"/>
+    <result property="updatedAt"         column="updated_at"/>
+  </resultMap>
+
+  <!-- 列表分页查询 -->
+  <select id="listByQuery" resultMap="KnowledgeBaseMap">
+    SELECT id, name, description, category, retrieval_strategy,
+           chunk_strategy, chunk_size, chunk_overlap, separators_json,
+           document_count, created_by_user_id, created_by_name,
+           strategy_version, is_deleted, deleted_at, created_at, updated_at
+      FROM km_knowledge_base
+     <where>
+       <if test="category != null and category != ''">
+         AND category = #{category}
+       </if>
+       <if test="nameKeyword != null and nameKeyword != ''">
+         AND name LIKE CONCAT('%', #{nameKeyword}, '%')
+       </if>
+       <if test="isDeleted != null">
+         AND is_deleted = #{isDeleted}
+       </if>
+     </where>
+     ORDER BY created_at DESC
+     LIMIT #{offset}, #{pageSize}
+  </select>
+
+  <select id="countByQuery" resultType="int">
+    SELECT COUNT(*)
+      FROM km_knowledge_base
+     <where>
+       <if test="category != null and category != ''">
+         AND category = #{category}
+       </if>
+       <if test="nameKeyword != null and nameKeyword != ''">
+         AND name LIKE CONCAT('%', #{nameKeyword}, '%')
+       </if>
+       <if test="isDeleted != null">
+         AND is_deleted = #{isDeleted}
+       </if>
+     </where>
+  </select>
+
+  <select id="getById" resultMap="KnowledgeBaseMap">
+    SELECT id, name, description, category, retrieval_strategy,
+           chunk_strategy, chunk_size, chunk_overlap, separators_json,
+           document_count, created_by_user_id, created_by_name,
+           strategy_version, is_deleted, deleted_at, created_at, updated_at
+      FROM km_knowledge_base
+     WHERE id = #{id}
+  </select>
+
+  <select id="listByIds" resultMap="KnowledgeBaseMap">
+    SELECT id, name, description, category, retrieval_strategy,
+           chunk_strategy, chunk_size, chunk_overlap, separators_json,
+           document_count, created_by_user_id, created_by_name,
+           strategy_version, is_deleted, deleted_at, created_at, updated_at
+      FROM km_knowledge_base
+     WHERE id IN
+           <foreach collection="ids" item="id" open="(" close=")" separator=",">
+             #{id}
+           </foreach>
+  </select>
+
+  <insert id="insert" parameterType="com.km.admin.knowledgebase.entity.KnowledgeBase"
+          useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO km_knowledge_base (
+        name, description, category, retrieval_strategy,
+        chunk_strategy, chunk_size, chunk_overlap, separators_json,
+        document_count, created_by_user_id, created_by_name,
+        strategy_version, is_deleted, deleted_at, created_at, updated_at
+    ) VALUES (
+        #{name}, #{description}, #{category}, #{retrievalStrategy},
+        #{chunkStrategy}, #{chunkSize}, #{chunkOverlap}, #{separatorsJson},
+        #{documentCount}, #{createdByUserId}, #{createdByName},
+        #{strategyVersion}, 0, NULL, NOW(), NULL
+    )
+  </insert>
+
+  <update id="updateById" parameterType="com.km.admin.knowledgebase.entity.KnowledgeBase">
+    UPDATE km_knowledge_base
+       SET name = #{name},
+           description = #{description},
+           category = #{category},
+           retrieval_strategy = #{retrievalStrategy},
+           chunk_strategy = #{chunkStrategy},
+           chunk_size = #{chunkSize},
+           chunk_overlap = #{chunkOverlap},
+           separators_json = #{separatorsJson},
+           created_by_user_id = #{createdByUserId},
+           created_by_name = #{createdByName},
+           strategy_version = #{strategyVersion},
+           updated_at = NOW()
+     WHERE id = #{id}
+  </update>
+
+  <update id="softDeleteById">
+    UPDATE km_knowledge_base
+       SET is_deleted = 1,
+           deleted_at = NOW(),
+           updated_at = NOW()
+     WHERE id = #{id}
+       AND is_deleted = 0
+  </update>
+
+  <update id="incrementDocumentCount">
+    UPDATE km_knowledge_base
+       SET document_count = document_count + 1,
+           updated_at = NOW()
+     WHERE id = #{id}
+       AND is_deleted = 0
+  </update>
+
+  <update id="decrementDocumentCount">
+    UPDATE km_knowledge_base
+       SET document_count = GREATEST(document_count - 1, 0),
+           updated_at = NOW()
+     WHERE id = #{id}
+  </update>
+
+</mapper>

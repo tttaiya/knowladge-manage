@@ -1,0 +1,55 @@
+server:
+  port: 9102
+
+spring:
+  application:
+    name: km-worker-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    virtual-host: ${RABBITMQ_VHOST:/km}
+    username: ${RABBITMQ_USER:km}
+    password: ${RABBITMQ_PASSWORD:km123456}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
+  redis:
+    host: ${REDIS_HOST:redis}
+    port: ${REDIS_PORT:6379}
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# km.admin / km.ai / minio 基础配置
+# 注：admin-service 当前上传 MinIO bucket 命名为 km-files，
+#     必改 4：docker-compose 中需为 km-worker-service 注入相同环境变量。
+km:
+  admin-base-url: ${KM_ADMIN_BASE_URL:http://km-admin-service:9101}
+  ai-base-url: ${KM_AI_BASE_URL:http://fastapi-ai-service:8000}
+  max-concurrent-tasks: ${MAX_CONCURRENT_TASKS:2}
+  # F4 整合（commit #23/24）：文件暂存根目录（与 docker-compose task-files 卷对应）
+  task-file-root: ${TASK_FILE_ROOT:/data/task-files}
+  # F4 整合（commit #24）：FastApiClient 超时配置
+  ai:
+    connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${AI_READ_TIMEOUT_MS:30000}
+  # F6（commit #17b）+ F4（commit #24）：内部 Token（与 admin 共享）
+  internal:
+    token: ${INTERNAL_TOKEN:demo-internal-token}
+
+# R8 必改 4：Worker 端 MinIO 配置（与 admin-service 同源）
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+  access-key: ${MINIO_ACCESS_KEY:kmminio}
+  secret-key: ${MINIO_SECRET_KEY:kmminio123}
+  bucket: ${MINIO_BUCKET:km-files}

@@ -1,0 +1,93 @@
+"""FastAPI 应用入口
+
+主应用程序，配置路由、中间件、静态文件等
+"""
+
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
+import os
+
+from app.config import config
+from loguru import logger
+from app.api import admin_dashboard, admin_settings, auth, bad_case, chat, citations, conversations, health
+from app.auth.permissions import require_login
+from app.db.session import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时执行
+    logger.info("=" * 60)
+    logger.info(f"🚀 {config.app_name} v{config.app_version} 启动中...")
+    logger.info(f"📝 环境: {'开发' if config.debug else '生产'}")
+    logger.info(f"🌐 监听地址: http://{config.host}:{config.port}")
+    logger.info(f"📚 API 文档: http://{config.host}:{config.port}/docs")
+    
+    init_db()
+    logger.info("✅ 数据库初始化完成")
+
+    logger.info("=" * 60)
+    
+    yield
+    
+    logger.info(f"👋 {config.app_name} 关闭")
+
+
+# 创建 FastAPI 应用
+app = FastAPI(
+    title=config.app_name,
+    version=config.app_version,
+    description="基于 LangChain 的智能oncall运维系统",
+    lifespan=lifespan
+)
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 生产环境应该限制具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 注册路由
+app.include_router(health.router, tags=["健康检查"])
+app.include_router(auth.router, prefix="/api", tags=["认证"])
+app.include_router(conversations.router, prefix="/api", tags=["会话"])
+app.include_router(chat.router, prefix="/api", tags=["对话"])
+app.include_router(bad_case.router, prefix="/api", tags=["BadCase复盘"], dependencies=[Depends(require_login)])
+app.include_router(admin_settings.router, prefix="/api", tags=["系统配置"])
+app.include_router(admin_dashboard.router, prefix="/api", tags=["运营统计"])
+app.include_router(citations.router, prefix="/api", tags=["引用"])
+
+# 挂载静态文件
+static_dir = "static"
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+@app.get("/")
+async def root():
+    """返回首页"""
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {
+        "message": f"Welcome to {config.app_name} API",
+        "version": config.app_version,
+        "docs": "/docs"
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "app.main:app",
+        host=config.host,
+        port=config.port,
+        reload=config.debug,
+        log_level="info"
+    )

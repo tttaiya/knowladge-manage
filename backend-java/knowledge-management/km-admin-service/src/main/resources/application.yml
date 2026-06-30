@@ -1,0 +1,55 @@
+server:
+  port: 9101
+
+spring:
+  application:
+    name: km-admin-service
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://mysql:3306/km?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USER:km}
+    password: ${MYSQL_PASSWORD:km123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    virtual-host: ${RABBITMQ_VHOST:/km}
+    username: ${RABBITMQ_USER:km}
+    password: ${RABBITMQ_PASSWORD:km123456}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.km.admin.review.entity,com.km.admin.document.entity,com.km.admin.config.dto,com.km.admin.config.entity,com.km.admin.knowledgebase.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# 文档管理配置（R10 / V3 / V4 落地）
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+  access-key: ${MINIO_ACCESS_KEY:kmminio}
+  secret-key: ${MINIO_SECRET_KEY:kmminio123}
+  bucket: ${MINIO_BUCKET:km-files}
+
+km:
+  task:
+    user-quota: 2
+  upload:
+    max-file-size-mb: 50
+    max-batch-count: 10
+    allowed-extensions: pdf,docx,pptx,xlsx,md,txt,png,jpg,jpeg
+  recycle:
+    retention-days: 30
+  # F6（commit #15）：内部接口 X-Service-Token 校验，与 Worker 共用环境变量 INTERNAL_TOKEN（R33）
+  internal:
+    token: ${INTERNAL_TOKEN:demo-internal-token}

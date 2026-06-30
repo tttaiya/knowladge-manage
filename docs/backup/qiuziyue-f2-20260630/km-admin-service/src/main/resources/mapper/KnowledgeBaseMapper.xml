@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.mapper.KnowledgeBaseMapper">
+    <resultMap id="KnowledgeBaseResultMap" type="com.km.admin.model.entity.KnowledgeBase">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="description" property="description"/>
+        <result column="category" property="category"/>
+        <result column="retrieval_strategy" property="retrievalStrategy"/>
+        <result column="chunk_strategy" property="chunkStrategy"/>
+        <result column="chunk_size" property="chunkSize"/>
+        <result column="chunk_overlap" property="chunkOverlap"/>
+        <result column="separators_json" property="separatorsJson"/>
+        <result column="document_count" property="documentCount"/>
+        <result column="created_by_user_id" property="createdByUserId"/>
+        <result column="created_by_name" property="createdByName"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <resultMap id="KnowledgeBaseVOResultMap" type="com.km.admin.model.vo.KnowledgeBaseVO">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="description" property="description"/>
+        <result column="category" property="category"/>
+        <result column="retrieval_strategy" property="retrievalStrategy"/>
+        <result column="chunk_strategy" property="chunkStrategy"/>
+        <result column="chunk_size" property="chunkSize"/>
+        <result column="chunk_overlap" property="chunkOverlap"/>
+        <result column="separators_json" property="separatorsJson"/>
+        <result column="document_count" property="documentCount"/>
+        <result column="created_by_user_id" property="createdByUserId"/>
+        <result column="created_by_name" property="createdByName"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, name, description, category, retrieval_strategy, chunk_strategy,
+        chunk_size, chunk_overlap, separators_json, document_count,
+        created_by_user_id, created_by_name, is_deleted, created_at, updated_at
+    </sql>
+
+    <select id="selectPage" resultMap="KnowledgeBaseVOResultMap">
+        SELECT <include refid="BaseColumns" />
+        FROM km_knowledge_base
+        WHERE is_deleted = 0
+        <if test="query.category != null and query.category != ''">
+            AND category = #{query.category}
+        </if>
+        <if test="query.q != null and query.q != ''">
+            AND (LOWER(name) LIKE CONCAT('%', LOWER(#{query.q}), '%')
+            OR LOWER(IFNULL(description, '')) LIKE CONCAT('%', LOWER(#{query.q}), '%'))
+        </if>
+        ORDER BY created_at DESC
+        LIMIT #{offset}, #{query.pageSize}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1)
+        FROM km_knowledge_base
+        WHERE is_deleted = 0
+        <if test="query.category != null and query.category != ''">
+            AND category = #{query.category}
+        </if>
+        <if test="query.q != null and query.q != ''">
+            AND (LOWER(name) LIKE CONCAT('%', LOWER(#{query.q}), '%')
+            OR LOWER(IFNULL(description, '')) LIKE CONCAT('%', LOWER(#{query.q}), '%'))
+        </if>
+    </select>
+
+    <select id="selectById" resultMap="KnowledgeBaseResultMap">
+        SELECT <include refid="BaseColumns" />
+        FROM km_knowledge_base
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="selectDetailById" resultMap="KnowledgeBaseVOResultMap">
+        SELECT <include refid="BaseColumns" />
+        FROM km_knowledge_base
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="selectByName" resultMap="KnowledgeBaseResultMap">
+        SELECT <include refid="BaseColumns" />
+        FROM km_knowledge_base
+        WHERE name = #{name} AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.km.admin.model.entity.KnowledgeBase" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO km_knowledge_base (
+            name, description, category, retrieval_strategy, chunk_strategy,
+            chunk_size, chunk_overlap, separators_json, document_count,
+            created_by_user_id, created_by_name, is_deleted, created_at, updated_at
+        ) VALUES (
+            #{name}, #{description}, #{category}, #{retrievalStrategy}, #{chunkStrategy},
+            #{chunkSize}, #{chunkOverlap}, #{separatorsJson}, #{documentCount},
+            #{createdByUserId}, #{createdByName}, #{isDeleted}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="com.km.admin.model.entity.KnowledgeBase">
+        UPDATE km_knowledge_base
+        SET name = #{name},
+            description = #{description},
+            category = #{category},
+            retrieval_strategy = #{retrievalStrategy},
+            chunk_strategy = #{chunkStrategy},
+            chunk_size = #{chunkSize},
+            chunk_overlap = #{chunkOverlap},
+            separators_json = #{separatorsJson},
+            updated_at = #{updatedAt}
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="logicDeleteById">
+        UPDATE km_knowledge_base
+        SET is_deleted = 1,
+            updated_at = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="logicBatchDelete">
+        UPDATE km_knowledge_base
+        SET is_deleted = 1,
+            updated_at = NOW()
+        WHERE is_deleted = 0 AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <select id="countReadyDocumentsByKbId" resultType="int">
+        SELECT COUNT(1)
+        FROM km_document
+        WHERE kb_id = #{kbId}
+          AND is_deleted = 0
+          AND status = 'READY'
+    </select>
+</mapper>
