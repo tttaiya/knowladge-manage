@@ -33,9 +33,11 @@ export interface ParserConfig {
 }
 
 export interface ConnectionTestPayload {
-  type: 'embedding' | 'rerank' | 'ocr'
+  type: 'embedding' | 'rerank' | 'parser' | 'ocr'
   apiBase: string
   apiKey?: string
+  model?: string
+  timeoutSeconds?: number
 }
 
 export interface ConnectionTestResult {
@@ -50,7 +52,7 @@ export interface ConnectionTestResult {
  */
 function stripMaskedApiKey<T extends { apiKey?: string }>(payload: T): T {
   const data = { ...payload }
-  if (!data.apiKey || data.apiKey === '********') {
+  if (data.apiKey === undefined || data.apiKey === '********') {
     delete data.apiKey
   }
   return data

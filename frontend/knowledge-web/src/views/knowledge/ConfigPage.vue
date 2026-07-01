@@ -30,7 +30,7 @@
             <!-- R6/v6：默认空字符串 / 已掩码 -->
           </el-form-item>
           <el-form-item label="向量维度" required>
-            <el-input-number v-model="embeddingForm.dimension" :min="1" :step="1" controls-position="right" />
+            <el-input-number v-model="embeddingForm.dimension" :min="1" :max="8192" :step="1" controls-position="right" />
             <!-- 默认 1024 由后端返回 -->
           </el-form-item>
         </el-form>
@@ -39,6 +39,13 @@
           <el-button :loading="testing === 'embedding'" @click="testConnection('embedding')">测试连接</el-button>
           <el-button type="primary" :loading="saving === 'embedding'" @click="saveEmbeddingConfig">保存</el-button>
         </div>
+        <p
+          v-if="connectionResults.embedding"
+          class="test-result"
+          :class="{ success: connectionResults.embedding.success, failed: !connectionResults.embedding.success }"
+        >
+          {{ formatConnectionResult(connectionResults.embedding) }}
+        </p>
       </el-card>
 
       <el-card class="config-card" shadow="never">
@@ -62,7 +69,7 @@
             <!-- R6/v6：默认空字符串 / 已掩码 -->
           </el-form-item>
           <el-form-item label="Top N" required>
-            <el-input-number v-model="rerankForm.topN" :min="1" :step="1" controls-position="right" />
+            <el-input-number v-model="rerankForm.topN" :min="1" :max="100" :step="1" controls-position="right" />
             <!-- 默认 10 由后端返回 -->
           </el-form-item>
           <el-form-item label="阈值" required>
@@ -75,6 +82,13 @@
           <el-button :loading="testing === 'rerank'" @click="testConnection('rerank')">测试连接</el-button>
           <el-button type="primary" :loading="saving === 'rerank'" @click="saveRerankConfig">保存</el-button>
         </div>
+        <p
+          v-if="connectionResults.rerank"
+          class="test-result"
+          :class="{ success: connectionResults.rerank.success, failed: !connectionResults.rerank.success }"
+        >
+          {{ formatConnectionResult(connectionResults.rerank) }}
+        </p>
       </el-card>
 
       <el-card class="config-card parser-card" shadow="never">
@@ -90,15 +104,15 @@
             <el-switch v-model="parserForm.paddleocrEnabled" active-text="开启" inactive-text="关闭" />
           </el-form-item>
           <el-form-item label="最大并发任务数" required>
-            <el-input-number v-model="parserForm.maxConcurrentTasks" :min="1" :step="1" controls-position="right" />
+            <el-input-number v-model="parserForm.maxConcurrentTasks" :min="1" :max="20" :step="1" controls-position="right" />
             <!-- 默认 4 由后端返回；Worker DynamicConfigHolder 热加载，R28 -->
           </el-form-item>
           <el-form-item label="最大重试次数" required>
-            <el-input-number v-model="parserForm.maxRetryCount" :min="0" :step="1" controls-position="right" />
+            <el-input-number v-model="parserForm.maxRetryCount" :min="0" :max="10" :step="1" controls-position="right" />
             <!-- 默认 3 由后端返回 -->
           </el-form-item>
           <el-form-item label="超时时间（秒）" required>
-            <el-input-number v-model="parserForm.timeoutSeconds" :min="1" :step="1" controls-position="right" />
+            <el-input-number v-model="parserForm.timeoutSeconds" :min="1" :max="600" :step="1" controls-position="right" />
             <!-- 默认 30 由后端返回 -->
           </el-form-item>
         </el-form>
@@ -129,6 +143,13 @@ import {
 const loading = ref(false)
 const saving = ref('')
 const testing = ref('')
+type TestType = 'embedding' | 'rerank'
+type TestResult = { success: boolean; message: string; latencyMs?: number }
+
+const connectionResults = reactive<Record<TestType, TestResult | null>>({
+  embedding: null,
+  rerank: null,
+})
 
 const embeddingForm = reactive({
   model: 'text-embedding-v1',
@@ -162,7 +183,7 @@ function isValidUrl(value: string): boolean {
 }
 
 function assertEmbedding(): boolean {
-  if (!embeddingForm.model || !Number.isInteger(embeddingForm.dimension) || embeddingForm.dimension <= 0) {
+  if (!embeddingForm.model || embeddingForm.model.length > 128 || !Number.isInteger(embeddingForm.dimension) || embeddingForm.dimension < 1 || embeddingForm.dimension > 8192) {
     ElMessage.warning('请检查嵌入模型名称和向量维度')
     return false
   }
@@ -170,11 +191,15 @@ function assertEmbedding(): boolean {
     ElMessage.warning('嵌入 API 地址格式非法')
     return false
   }
+  if (embeddingForm.apiKey && embeddingForm.apiKey.length > 512) {
+    ElMessage.warning('嵌入 API Key 长度不能超过 512')
+    return false
+  }
   return true
 }
 
 function assertRerank(): boolean {
-  if (!rerankForm.model || !Number.isInteger(rerankForm.topN) || rerankForm.topN <= 0) {
+  if (!rerankForm.model || rerankForm.model.length > 128 || !Number.isInteger(rerankForm.topN) || rerankForm.topN < 1 || rerankForm.topN > 100) {
     ElMessage.warning('请检查重排序模型名称和 Top N')
     return false
   }
@@ -186,20 +211,24 @@ function assertRerank(): boolean {
     ElMessage.warning('重排序 API 地址格式非法')
     return false
   }
+  if (rerankForm.apiKey && rerankForm.apiKey.length > 512) {
+    ElMessage.warning('重排序 API Key 长度不能超过 512')
+    return false
+  }
   return true
 }
 
 function assertParser(): boolean {
-  if (!Number.isInteger(parserForm.maxConcurrentTasks) || parserForm.maxConcurrentTasks <= 0) {
-    ElMessage.warning('最大并发任务数必须为正整数')
+  if (!Number.isInteger(parserForm.maxConcurrentTasks) || parserForm.maxConcurrentTasks < 1 || parserForm.maxConcurrentTasks > 20) {
+    ElMessage.warning('最大并发任务数必须为 1-20 的整数')
     return false
   }
-  if (!Number.isInteger(parserForm.maxRetryCount) || parserForm.maxRetryCount < 0) {
-    ElMessage.warning('最大重试次数必须为非负整数')
+  if (!Number.isInteger(parserForm.maxRetryCount) || parserForm.maxRetryCount < 0 || parserForm.maxRetryCount > 10) {
+    ElMessage.warning('最大重试次数必须为 0-10 的整数')
     return false
   }
-  if (!Number.isInteger(parserForm.timeoutSeconds) || parserForm.timeoutSeconds <= 0) {
-    ElMessage.warning('超时时间必须为正整数')
+  if (!Number.isInteger(parserForm.timeoutSeconds) || parserForm.timeoutSeconds < 1 || parserForm.timeoutSeconds > 600) {
+    ElMessage.warning('超时时间必须为 1-600 秒')
     return false
   }
   return true
@@ -265,7 +294,12 @@ async function saveParserConfig() {
   }
 }
 
-async function testConnection(type: 'embedding' | 'rerank') {
+function formatConnectionResult(result: TestResult): string {
+  const latency = typeof result.latencyMs === 'number' ? `（耗时 ${result.latencyMs} ms）` : ''
+  return `${result.success ? '成功' : '失败'}：${result.message}${latency}`
+}
+
+async function testConnection(type: TestType) {
   const target = type === 'embedding' ? embeddingForm : rerankForm
   if (!target.apiBase) {
     ElMessage.warning('请先填写 API 地址')
@@ -281,10 +315,15 @@ async function testConnection(type: 'embedding' | 'rerank') {
       type,
       apiBase: target.apiBase,
       apiKey: target.apiKey,
+      model: target.model,
+      timeoutSeconds: 15,
     })
+    connectionResults[type] = result
     result.success ? ElMessage.success(result.message) : ElMessage.error(result.message)
   } catch (error: any) {
-    ElMessage.error(error?.message || '连接测试失败')
+    const message = error?.message || '连接测试失败'
+    connectionResults[type] = { success: false, message }
+    ElMessage.error(message)
   } finally {
     testing.value = ''
   }
@@ -357,6 +396,24 @@ h1 {
 .actions {
   justify-content: flex-end;
   padding-top: 6px;
+}
+
+.test-result {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.test-result.success {
+  color: #166534;
+  background: #ecfdf3;
+}
+
+.test-result.failed {
+  color: #991b1b;
+  background: #fef2f2;
 }
 
 :deep(.el-input-number) {

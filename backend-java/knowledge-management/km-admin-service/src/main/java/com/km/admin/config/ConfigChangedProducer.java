@@ -35,6 +35,7 @@ public class ConfigChangedProducer {
     public void publishConfigChanged(String configGroup, Map<String, String> values) {
         ConfigChangedEvent event = new ConfigChangedEvent();
         event.setEventId(UUID.randomUUID().toString());
+        event.setConfigVersion(System.currentTimeMillis());
         event.setOccurredAt(Instant.now().toString());
         event.setSource("km-admin");
         event.setConfigGroup(configGroup);
