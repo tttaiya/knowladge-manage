@@ -27,6 +27,7 @@ public class DynamicConfigHolder {
     private final ObjectMapper objectMapper;
     private volatile int maxConcurrentTasks;
     private volatile boolean initialized = false;
+    private volatile long configVersion = 0L;
 
     public DynamicConfigHolder(ObjectMapper objectMapper, @Value("${km.max-concurrent-tasks:2}") int maxConcurrentTasks) {
         this.objectMapper = objectMapper;
@@ -67,6 +68,11 @@ public class DynamicConfigHolder {
         }
         try {
             Map<String, Object> map = objectMapper.readValue(eventJson, Map.class);
+            Object versionValue = map.get("configVersion");
+            long incomingVersion = versionValue == null ? System.currentTimeMillis() : Long.parseLong(versionValue.toString());
+            if (incomingVersion <= configVersion) {
+                return;
+            }
             String group = (String) map.get("configGroup");
             if (!"parser".equals(group)) {
                 return;
@@ -81,6 +87,7 @@ public class DynamicConfigHolder {
             }
             int n = Integer.parseInt(max.toString());
             setMaxConcurrentTasks(n); // 范围校验
+            configVersion = incomingVersion;
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             // R26：JSON 解析失败抛 AmqpRejectAndDontRequeueException → DLQ
             throw new AmqpRejectAndDontRequeueException("Invalid config event JSON", e);

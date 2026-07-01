@@ -26,6 +26,7 @@ export interface RerankConfig {
 }
 
 export interface ParserConfig {
+  apiBase: string
   paddleocrEnabled: boolean
   maxConcurrentTasks: number
   maxRetryCount: number

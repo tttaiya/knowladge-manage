@@ -100,6 +100,9 @@
         </template>
 
         <el-form label-position="top" :model="parserForm">
+          <el-form-item label="解析服务地址">
+            <el-input v-model.trim="parserForm.apiBase" placeholder="https://example.com/parser（可选）" clearable />
+          </el-form-item>
           <el-form-item label="PaddleOCR 开关" required>
             <el-switch v-model="parserForm.paddleocrEnabled" active-text="开启" inactive-text="关闭" />
           </el-form-item>
@@ -118,10 +121,16 @@
         </el-form>
 
         <div class="actions">
-          <!-- R3/v6：OCR 测试按钮 P0 阶段隐藏（钱小晓实现错误：用 embeddingForm.apiBase 测 OCR）；等真实 OCR 地址配置后启用 -->
-          <!-- <el-button :loading="testing === 'ocr'" @click="testConnection('ocr')">测试连接</el-button> -->
+          <el-button :loading="testing === 'parser'" @click="testConnection('parser')">测试连接</el-button>
           <el-button type="primary" :loading="saving === 'parser'" @click="saveParserConfig">保存</el-button>
         </div>
+        <p
+          v-if="connectionResults.parser"
+          class="test-result"
+          :class="{ success: connectionResults.parser.success, failed: !connectionResults.parser.success }"
+        >
+          {{ formatConnectionResult(connectionResults.parser) }}
+        </p>
       </el-card>
     </section>
   </main>
@@ -143,12 +152,13 @@ import {
 const loading = ref(false)
 const saving = ref('')
 const testing = ref('')
-type TestType = 'embedding' | 'rerank'
+type TestType = 'embedding' | 'rerank' | 'parser'
 type TestResult = { success: boolean; message: string; latencyMs?: number }
 
 const connectionResults = reactive<Record<TestType, TestResult | null>>({
   embedding: null,
   rerank: null,
+  parser: null,
 })
 
 const embeddingForm = reactive({
@@ -167,6 +177,7 @@ const rerankForm = reactive({
 })
 
 const parserForm = reactive({
+  apiBase: '',
   paddleocrEnabled: false,
   maxConcurrentTasks: 4,
   maxRetryCount: 3,
@@ -219,6 +230,10 @@ function assertRerank(): boolean {
 }
 
 function assertParser(): boolean {
+  if (parserForm.apiBase && !isValidUrl(parserForm.apiBase)) {
+    ElMessage.warning('解析服务地址格式非法')
+    return false
+  }
   if (!Number.isInteger(parserForm.maxConcurrentTasks) || parserForm.maxConcurrentTasks < 1 || parserForm.maxConcurrentTasks > 20) {
     ElMessage.warning('最大并发任务数必须为 1-20 的整数')
     return false
@@ -300,7 +315,7 @@ function formatConnectionResult(result: TestResult): string {
 }
 
 async function testConnection(type: TestType) {
-  const target = type === 'embedding' ? embeddingForm : rerankForm
+  const target = type === 'embedding' ? embeddingForm : type === 'rerank' ? rerankForm : parserForm
   if (!target.apiBase) {
     ElMessage.warning('请先填写 API 地址')
     return
@@ -314,8 +329,8 @@ async function testConnection(type: TestType) {
     const result = await testConfigConnection({
       type,
       apiBase: target.apiBase,
-      apiKey: target.apiKey,
-      model: target.model,
+      apiKey: 'apiKey' in target ? target.apiKey : undefined,
+      model: 'model' in target ? target.model : undefined,
       timeoutSeconds: 15,
     })
     connectionResults[type] = result

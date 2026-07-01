@@ -12,6 +12,10 @@ public class AiRetrievalRequest {
     private Integer topK;
     private Integer candidateK;
     private Double similarityThreshold;
+    private String embeddingModel;
+    private String embeddingApiBase;
+    private String rerankModel;
+    private String rerankApiBase;
     private Integer rerankTopN;
     private Double rerankThreshold;
 
@@ -77,6 +81,38 @@ public class AiRetrievalRequest {
 
     public void setSimilarityThreshold(Double similarityThreshold) {
         this.similarityThreshold = similarityThreshold;
+    }
+
+    public String getEmbeddingModel() {
+        return embeddingModel;
+    }
+
+    public void setEmbeddingModel(String embeddingModel) {
+        this.embeddingModel = embeddingModel;
+    }
+
+    public String getEmbeddingApiBase() {
+        return embeddingApiBase;
+    }
+
+    public void setEmbeddingApiBase(String embeddingApiBase) {
+        this.embeddingApiBase = embeddingApiBase;
+    }
+
+    public String getRerankModel() {
+        return rerankModel;
+    }
+
+    public void setRerankModel(String rerankModel) {
+        this.rerankModel = rerankModel;
+    }
+
+    public String getRerankApiBase() {
+        return rerankApiBase;
+    }
+
+    public void setRerankApiBase(String rerankApiBase) {
+        this.rerankApiBase = rerankApiBase;
     }
 
     public Integer getRerankTopN() {

@@ -17,11 +17,14 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,7 +48,11 @@ public class ConfigServiceImpl implements ConfigService {
 
     @Override
     public EmbeddingConfigDTO getEmbeddingConfig() {
-        return configMapper.loadEmbeddingConfig();
+        EmbeddingConfigDTO out = configMapper.loadEmbeddingConfig();
+        if (out != null) {
+            out.setApiKey(API_KEY_MASK);
+        }
+        return out;
     }
 
     @Override
@@ -56,7 +63,9 @@ public class ConfigServiceImpl implements ConfigService {
         updateValue("embedding.api_key", resolveApiKey("embedding.api_key", dto.getApiKey()));
         updateValue("embedding.dimension", String.valueOf(dto.getDimension()));
 
-        registerAfterCommit("embedding", null);
+        long version = nextConfigVersion();
+        writeAudit("embedding", version, "updated: embedding.model, embedding.api_base, embedding.dimension, embedding.api_key(masked)");
+        registerAfterCommit("embedding", collectSafeConfigValues(), version);
 
         EmbeddingConfigDTO out = configMapper.loadEmbeddingConfig();
         out.setApiKey(API_KEY_MASK);
@@ -65,7 +74,11 @@ public class ConfigServiceImpl implements ConfigService {
 
     @Override
     public RerankConfigDTO getRerankConfig() {
-        return configMapper.loadRerankConfig();
+        RerankConfigDTO out = configMapper.loadRerankConfig();
+        if (out != null) {
+            out.setApiKey(API_KEY_MASK);
+        }
+        return out;
     }
 
     @Override
@@ -77,7 +90,9 @@ public class ConfigServiceImpl implements ConfigService {
         updateValue("rerank.top_n", String.valueOf(dto.getTopN()));
         updateValue("rerank.threshold", String.valueOf(dto.getThreshold()));
 
-        registerAfterCommit("rerank", null);
+        long version = nextConfigVersion();
+        writeAudit("rerank", version, "updated: rerank.model, rerank.api_base, rerank.top_n, rerank.threshold, rerank.api_key(masked)");
+        registerAfterCommit("rerank", collectSafeConfigValues(), version);
 
         RerankConfigDTO out = configMapper.loadRerankConfig();
         out.setApiKey(API_KEY_MASK);
@@ -92,18 +107,22 @@ public class ConfigServiceImpl implements ConfigService {
     @Override
     public ParserConfigDTO updateParserConfig(ParserConfigDTO dto) {
         validateParserConfig(dto);
+        updateValue("parser.api_base", dto.getApiBase() == null ? "" : dto.getApiBase());
         updateValue("parser.paddleocr_enabled", String.valueOf(dto.isPaddleocrEnabled()));
         updateValue("parser.max_concurrent_tasks", String.valueOf(dto.getMaxConcurrentTasks()));
         updateValue("parser.max_retry_count", String.valueOf(dto.getMaxRetryCount()));
         updateValue("parser.timeout_seconds", String.valueOf(dto.getTimeoutSeconds()));
 
-        registerAfterCommit("parser", collectSafeConfigValues());
+        long version = nextConfigVersion();
+        writeAudit("parser", version, "updated: parser.api_base, parser.paddleocr_enabled, parser.max_concurrent_tasks, parser.max_retry_count, parser.timeout_seconds");
+        registerAfterCommit("parser", collectSafeConfigValues(), version);
 
         return dto;
     }
 
     @Override
     public ConnectionTestResult testConnection(ConnectionTestRequest req) {
+        fillSavedConnectionFields(req);
         ConnectionTestResult invalid = validateConnectionRequest(req);
         if (invalid != null) {
             return invalid;
@@ -267,9 +286,40 @@ public class ConfigServiceImpl implements ConfigService {
         if (dto == null) {
             throw new IllegalArgumentException("parser config must not be null");
         }
+        validateOptionalHttpUrl(dto.getApiBase(), "parser.api_base");
         requireRange(dto.getMaxConcurrentTasks(), "parser.max_concurrent_tasks", 1, 20);
         requireRange(dto.getMaxRetryCount(), "parser.max_retry_count", 0, 10);
         requireRange(dto.getTimeoutSeconds(), "parser.timeout_seconds", 1, 600);
+    }
+
+    private void fillSavedConnectionFields(ConnectionTestRequest req) {
+        if (req == null || req.getType() == null) {
+            return;
+        }
+        String type = req.getType().trim().toLowerCase();
+        String prefix;
+        if ("embedding".equals(type)) {
+            prefix = "embedding";
+        } else if ("rerank".equals(type)) {
+            prefix = "rerank";
+        } else if ("parser".equals(type) || "ocr".equals(type)) {
+            prefix = "parser";
+        } else {
+            return;
+        }
+
+        if (isBlank(req.getApiBase())) {
+            req.setApiBase(safeGetValue(prefix + ".api_base"));
+        }
+        if (("embedding".equals(type) || "rerank".equals(type)) && isBlank(req.getModel())) {
+            req.setModel(safeGetValue(prefix + ".model"));
+        }
+        if ("embedding".equals(type) || "rerank".equals(type)) {
+            String apiKey = req.getApiKey();
+            if (apiKey == null || apiKey.startsWith(API_KEY_MASK)) {
+                req.setApiKey(safeGetValue(prefix + ".api_key"));
+            }
+        }
     }
 
     private void requireText(String value, String field, int maxLength) {
@@ -374,6 +424,10 @@ public class ConfigServiceImpl implements ConfigService {
         return apiKey;
     }
 
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
     private String trimTrailingSlash(String value) {
         while (value.endsWith("/")) {
             value = value.substring(0, value.length() - 1);
@@ -433,17 +487,52 @@ public class ConfigServiceImpl implements ConfigService {
         return m;
     }
 
-    private void registerAfterCommit(String group, Map<String, String> values) {
+    private long nextConfigVersion() {
+        return System.currentTimeMillis();
+    }
+
+    private void writeAudit(String group, Long version, String summary) {
+        Operator operator = currentOperator();
+        configMapper.insertConfigChangeLog(
+                operator.id,
+                operator.name,
+                group,
+                version,
+                summary == null ? "" : summary);
+    }
+
+    private Operator currentOperator() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            return new Operator("system", "system");
+        }
+        HttpServletRequest request = attrs.getRequest();
+        String id = request.getHeader("X-User-Id");
+        String name = request.getHeader("X-User-Name");
+        return new Operator(isBlank(id) ? "system" : id, isBlank(name) ? "system" : name);
+    }
+
+    private void registerAfterCommit(String group, Map<String, String> values, Long version) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            configChangedProducer.publishConfigChanged(group, values);
+            configChangedProducer.publishConfigChanged(group, values, version);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                configChangedProducer.publishConfigChanged(group, values);
+                configChangedProducer.publishConfigChanged(group, values, version);
             }
         });
+    }
+
+    private static class Operator {
+        private final String id;
+        private final String name;
+
+        private Operator(String id, String name) {
+            this.id = id;
+            this.name = name;
+        }
     }
 
     @SuppressWarnings("unused")

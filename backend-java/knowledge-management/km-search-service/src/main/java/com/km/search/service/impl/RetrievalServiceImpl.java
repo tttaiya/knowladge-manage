@@ -2,6 +2,7 @@ package com.km.search.service.impl;
 
 import com.km.search.client.AiRetrievalClient;
 import com.km.search.config.RetrievalDefaultsProperties;
+import com.km.search.config.SearchDynamicConfigHolder;
 import com.km.search.dto.AiRetrievalCandidate;
 import com.km.search.dto.AiRetrievalRequest;
 import com.km.search.dto.AiRetrievalResponse;
@@ -34,13 +35,16 @@ public class RetrievalServiceImpl implements RetrievalService {
     private final RetrievalMapper retrievalMapper;
     private final AiRetrievalClient aiRetrievalClient;
     private final RetrievalDefaultsProperties defaults;
+    private final SearchDynamicConfigHolder dynamicConfigHolder;
 
     public RetrievalServiceImpl(RetrievalMapper retrievalMapper,
                                 AiRetrievalClient aiRetrievalClient,
-                                RetrievalDefaultsProperties defaults) {
+                                RetrievalDefaultsProperties defaults,
+                                SearchDynamicConfigHolder dynamicConfigHolder) {
         this.retrievalMapper = retrievalMapper;
         this.aiRetrievalClient = aiRetrievalClient;
         this.defaults = defaults;
+        this.dynamicConfigHolder = dynamicConfigHolder;
     }
 
     @Override
@@ -144,14 +148,18 @@ public class RetrievalServiceImpl implements RetrievalService {
                 : request.getSimilarityThreshold();
         assertThreshold("similarityThreshold", similarityThreshold);
 
-        int rerankTopN = request.getRerankTopN() == null ? defaults.getDefaultRerankTopN() : request.getRerankTopN();
+        int defaultRerankTopN = dynamicConfigHolder.getRerankTopN() == null
+                ? defaults.getDefaultRerankTopN()
+                : dynamicConfigHolder.getRerankTopN();
+        int rerankTopN = request.getRerankTopN() == null ? defaultRerankTopN : request.getRerankTopN();
         if (rerankTopN <= 0 || rerankTopN > defaults.getMaxTopK()) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "rerankTopN 范围为 1～" + defaults.getMaxTopK());
         }
 
-        double rerankThreshold = request.getRerankThreshold() == null
+        double defaultRerankThreshold = dynamicConfigHolder.getRerankThreshold() == null
                 ? defaults.getDefaultRerankThreshold()
-                : request.getRerankThreshold();
+                : dynamicConfigHolder.getRerankThreshold();
+        double rerankThreshold = request.getRerankThreshold() == null ? defaultRerankThreshold : request.getRerankThreshold();
         assertThreshold("rerankThreshold", rerankThreshold);
 
         NormalizedRequest normalized = new NormalizedRequest();
@@ -209,6 +217,10 @@ public class RetrievalServiceImpl implements RetrievalService {
         aiRequest.setTopK(normalized.topK);
         aiRequest.setCandidateK(candidateK);
         aiRequest.setSimilarityThreshold(normalized.similarityThreshold);
+        aiRequest.setEmbeddingModel(dynamicConfigHolder.getEmbeddingModel());
+        aiRequest.setEmbeddingApiBase(dynamicConfigHolder.getEmbeddingApiBase());
+        aiRequest.setRerankModel(dynamicConfigHolder.getRerankModel());
+        aiRequest.setRerankApiBase(dynamicConfigHolder.getRerankApiBase());
         aiRequest.setRerankTopN(normalized.rerankTopN);
         aiRequest.setRerankThreshold(normalized.rerankThreshold);
         return aiRequest;
