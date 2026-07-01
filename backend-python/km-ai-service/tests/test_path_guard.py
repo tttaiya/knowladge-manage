@@ -18,24 +18,24 @@ from fastapi import HTTPException
 
 # 设置测试环境变量（在 import 之前）
 os.environ.setdefault("INTERNAL_TOKEN", "test-token")
-os.environ.setdefault("ALLOWED_DOCUMENT_ROOT", "/tmp/f4-test-task-files")
-
-
 class TestPathGuard(unittest.TestCase):
 
     def setUp(self):
-        # 创建临时 task-files 目录
-        self.tmp_root = Path(os.environ["ALLOWED_DOCUMENT_ROOT"])
-        self.tmp_root.mkdir(parents=True, exist_ok=True)
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.tmp_root = Path(self.tmp_dir.name)
+        self.env_patch = patch.dict(
+            os.environ,
+            {"ALLOWED_DOCUMENT_ROOT": str(self.tmp_root)},
+        )
+        self.env_patch.start()
         self.task_dir = self.tmp_root / "100"
         self.task_dir.mkdir(parents=True, exist_ok=True)
         self.valid_pdf = self.task_dir / "source.pdf"
         self.valid_pdf.write_bytes(b"%PDF-1.4\n%fake pdf content\n")
 
     def tearDown(self):
-        import shutil
-        if self.tmp_root.exists():
-            shutil.rmtree(self.tmp_root, ignore_errors=True)
+        self.env_patch.stop()
+        self.tmp_dir.cleanup()
 
     def test_etc_passwd_rejected(self):
         from app.services.path_guard import resolve_safe_path
@@ -46,7 +46,7 @@ class TestPathGuard(unittest.TestCase):
     def test_parent_traversal_rejected(self):
         from app.services.path_guard import resolve_safe_path
         # 模拟 ../etc/passwd（构造一个 resolved 后逃出 ALLOWED_ROOT 的路径）
-        bad_path = str(self.tmp_root / ".." / "etc" / "passwd")
+        bad_path = str(self.tmp_root.parent / "outside.pdf")
         with self.assertRaises(HTTPException) as ctx:
             resolve_safe_path(bad_path, "pdf")
         self.assertEqual(ctx.exception.status_code, 403)
@@ -74,12 +74,22 @@ class TestPathGuard(unittest.TestCase):
         self.assertEqual(result, self.valid_pdf.resolve())
 
     def test_file_too_large_rejected(self):
-        from app.services.path_guard import resolve_safe_path, MAX_FILE_SIZE
+        import app.services.path_guard as path_guard
         big_file = self.task_dir / "source.pdf"
-        big_file.write_bytes(b"x" * (MAX_FILE_SIZE + 1))
-        with self.assertRaises(HTTPException) as ctx:
-            resolve_safe_path(str(big_file), "pdf")
+        big_file.write_bytes(b"x" * 17)
+        with patch.object(path_guard, "MAX_FILE_SIZE", 16):
+            with self.assertRaises(HTTPException) as ctx:
+                path_guard.resolve_safe_path(str(big_file), "pdf")
         self.assertEqual(ctx.exception.status_code, 413)
+
+    def test_empty_file_rejected(self):
+        from app.services.path_guard import resolve_safe_path
+        empty_file = self.task_dir / "empty.txt"
+        empty_file.touch()
+        with self.assertRaises(HTTPException) as ctx:
+            resolve_safe_path(str(empty_file), "txt")
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("empty", str(ctx.exception.detail))
 
     def test_file_not_found_rejected(self):
         from app.services.path_guard import resolve_safe_path

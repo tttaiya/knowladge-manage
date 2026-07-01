@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI
 from app.api.process import router as process_router
 from app.middleware import require_internal_token
 
-app = FastAPI(title="KM AI Service", version="1.0.0")
+app = FastAPI(title="KM AI Service", version="1.1.0")
 
 
 @app.get("/health")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -16,13 +17,23 @@ def get_ocr_engine():
             "请执行：pip install paddleocr paddlepaddle"
         ) from exc
 
+    cpu_threads = max(1, int(os.environ.get("OCR_CPU_THREADS", "2")))
+    options = {
+        "use_angle_cls": True,
+        "lang": "ch",
+        "use_gpu": False,
+        "enable_mkldnn": False,
+        "cpu_threads": cpu_threads,
+        "ir_optim": False,
+    }
+
     try:
-        return PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+        return PaddleOCR(show_log=False, **options)
     except (TypeError, ValueError) as exc:
         # PaddleOCR 3.x 删除了 show_log，并将未知参数异常改成了 ValueError。
         if "show_log" not in str(exc):
             raise
-        return PaddleOCR(use_angle_cls=True, lang="ch")
+        return PaddleOCR(**options)
 
 
 def ocr_image(image_path: str | Path) -> tuple[str, Optional[float]]:

@@ -35,11 +35,6 @@ def as_response(model):
     return model.model_dump(by_alias=True, exclude_none=True)
 
 
-@router.get("/health")
-def health():
-    return {"status": "UP", "service": "km-ai-service", "module": "parse-ocr-chunk"}
-
-
 @router.post(
     "/internal/ai/parse",
     dependencies=[Depends(require_internal_token)],
@@ -112,7 +107,7 @@ def parse_api(request: WorkerTaskRequest):
                 errorMessage=f"file not found: {exc}",
             )
         )
-    except ValueError as exc:
+    except (ValueError, NotImplementedError) as exc:
         # 格式不支持 / 参数非法 → PARSE
         return as_response(
             ParseResponse(
@@ -127,10 +122,34 @@ def parse_api(request: WorkerTaskRequest):
                 errorMessage=str(exc),
             )
         )
+    except RuntimeError as exc:
+        # 依赖缺失、OCR 引擎失败与空识别结果需要稳定映射，不能再次抛异常。
+        message = str(exc)
+        stage = "OCR" if ("OCR" in message.upper() or "PADDLE" in message.upper()) else "PARSE"
+        logger.exception(
+            "F4 parse failed traceId=%s taskId=%s stage=%s", request.trace_id, request.task_id, stage,
+        )
+        return as_response(
+            ParseResponse(
+                success=False,
+                taskId=request.task_id,
+                docId=request.doc_id,
+                kbId=request.kb_id,
+                traceId=request.trace_id,
+                extension=request.extension or "",
+                parsedText="", blocks=[],
+                errorStage=stage,
+                errorMessage=message[:500],
+            )
+        )
     except Exception as exc:
         exc_name = exc.__class__.__name__
         # OCR 失败特征：paddleocr / paddleocr.PaddleOcr / paddle 相关异常
-        if "Paddle" in exc_name or "OCR" in str(exc) or "ocr" in request.task_payload_json.parseBackend.lower():
+        if (
+            "paddle" in exc_name.lower()
+            or "ocr" in str(exc).lower()
+            or "ocr" in request.task_payload_json.parse_backend.lower()
+        ):
             stage = "OCR"
         else:
             stage = "INTERNAL"
