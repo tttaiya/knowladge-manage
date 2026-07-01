@@ -20,16 +20,22 @@ services:
       - ../../sql/document-version.sql:/docker-entrypoint-initdb.d/06_document_version.sql:ro
       - ../../sql/purge-audit.sql:/docker-entrypoint-initdb.d/09_purge_audit.sql:ro
       - ../../sql/review.sql:/docker-entrypoint-initdb.d/07_review.sql:ro
-      # R17/V4: V3 文档字段加法迁移（mime_type / file_size / file_hash / uploader_name / chunk_count / retry_count / tag 唯一索引）
+
+      # R17/V4：文档模块加法迁移
       - ../../sql/V3__document_module_integration.sql:/docker-entrypoint-initdb.d/10_V3__document_module_integration.sql:ro
-      # R14/V4: 统一用户 ID 为 VARCHAR(36) UUID
+
+      # R14/V4：用户 ID 统一为 UUID
       - ../../sql/V4__global_user_id_uuid.sql:/docker-entrypoint-initdb.d/11_V4__global_user_id_uuid.sql:ro
-      # F6（commit #14/18）：km_system_config 表 + 13 条 seed 数据
-      # R12：加法迁移，不破坏现有表
+
+      # F6：系统配置
       - ../../sql/km-system-config.sql:/docker-entrypoint-initdb.d/12_km_system_config.sql:ro
-      # F2（commit #27）：知识库管理加法迁移（description/category/chunk_strategy/...+active_name 生成列+uk_kb_active_name）
-      # 挂在 init-demo 之前（13 < 99），确保 demo seed 在新列已就位后执行
+
+      # F2：知识库管理加法迁移
       - ../../sql/V5__knowledge_base_management.sql:/docker-entrypoint-initdb.d/13_V5__knowledge_base_management.sql:ro
+
+      # F5：REEMBED 内容版本
+      - ../../sql/V6__f5_reembed_content_version.sql:/docker-entrypoint-initdb.d/14_V6__f5_reembed_content_version.sql:ro
+
       - ../../sql/init-demo.sql:/docker-entrypoint-initdb.d/99_init_demo.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ukm", "-pkm123456"]

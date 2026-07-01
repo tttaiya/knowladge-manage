@@ -3,20 +3,56 @@ package com.km.admin;
 import org.springframework.stereotype.Component;
 
 /**
- * 切片重向量化 Producer。R14：operatorUserId 改 String UUID。
- * 兼容 review 模块：原传 0L 表示"系统触发"；现在改用 null 表示"无用户上下文"。
+ * 人工编辑切片后创建 REEMBED 任务。
  */
 @Component
 public class ChunkReembedProducer {
 
     private final TaskCommandService taskCommandService;
 
-    public ChunkReembedProducer(TaskCommandService taskCommandService) {
+    public ChunkReembedProducer(
+            TaskCommandService taskCommandService
+    ) {
         this.taskCommandService = taskCommandService;
     }
 
-    public void send(Long chunkId, Long docId, Long kbId, String traceId) {
-        // 系统触发的切片重向量化：userId 传 null（TriggerSourceEnum.REVIEW_EDIT 在 TaskCommandService 内设置）
-        taskCommandService.createReembedTask(docId, chunkId, null, null);
+    public void send(
+            Long chunkId,
+            Long docId,
+            Long kbId,
+            Long contentVersion
+    ) {
+        if (chunkId == null) {
+            throw new IllegalArgumentException(
+                    "chunkId 不能为空"
+            );
+        }
+
+        if (docId == null) {
+            throw new IllegalArgumentException(
+                    "docId 不能为空"
+            );
+        }
+
+        if (contentVersion == null
+                || contentVersion < 1) {
+            throw new IllegalArgumentException(
+                    "contentVersion 必须大于等于 1"
+            );
+        }
+
+        /*
+         * 人工审核编辑属于系统触发任务，
+         * operatorUserId 保持 null。
+         *
+         * kbId 由 TaskCommandService 根据 docId、
+         * chunkId 从数据库读取并校验。
+         */
+        taskCommandService.createReembedTask(
+                docId,
+                chunkId,
+                null,
+                contentVersion
+        );
     }
 }

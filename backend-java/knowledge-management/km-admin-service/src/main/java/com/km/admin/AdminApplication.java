@@ -156,11 +156,64 @@ class TaskCommandService {
         return createWithQuota(cmd);
     }
 
-    public Long createReembedTask(Long docId, Long chunkId, String operatorUserId, Long chunkContentVersion) {
-        CreateTaskCommand cmd = new CreateTaskCommand("REEMBED", docId, operatorUserId, "REVIEW_EDIT");
+    @Transactional(rollbackFor = Exception.class)
+    public Long createReembedTask(Long docId, Long chunkId, String operatorUserId,
+                                  Long requestedContentVersion) {
+        if (docId == null || chunkId == null) {
+            throw new IllegalArgumentException("docId and chunkId must not be null");
+        }
+
+        Map<String, Object> chunk = findActiveChunkForReembed(docId, chunkId);
+        Long kbId = toLong(chunk.get("kbId"));
+        Long versionNo = toLong(chunk.get("versionNo"));
+        Long chunkIndex = toLong(chunk.get("chunkIndex"));
+        Long contentVersion = toLong(chunk.get("contentVersion"));
+        String content = toText(chunk.get("content"));
+        String vectorId = toText(chunk.get("vectorId"));
+
+        if (kbId == null || versionNo == null || versionNo < 1
+                || chunkIndex == null || chunkIndex < 1
+                || contentVersion == null || contentVersion < 1) {
+            throw new IllegalStateException("Invalid REEMBED chunk metadata: chunkId=" + chunkId);
+        }
+        if (requestedContentVersion != null
+                && !requestedContentVersion.equals(contentVersion)) {
+            throw new IllegalStateException(
+                    "Chunk content version changed: requested=" + requestedContentVersion
+                            + ", actual=" + contentVersion);
+        }
+        if (content == null || content.trim().isEmpty()) {
+            throw new IllegalStateException("Chunk content is empty: chunkId=" + chunkId);
+        }
+        if (vectorId == null || vectorId.trim().isEmpty()) {
+            vectorId = "doc_" + docId + "_v_" + versionNo + "_idx_" + chunkIndex;
+        }
+
+        Map<String, Object> chunkPayload = new java.util.LinkedHashMap<String, Object>();
+        chunkPayload.put("chunkId", chunkId);
+        chunkPayload.put("docId", docId);
+        chunkPayload.put("kbId", kbId);
+        chunkPayload.put("versionNo", versionNo);
+        chunkPayload.put("chunkIndex", chunkIndex);
+        chunkPayload.put("content", content);
+        chunkPayload.put("chapterPath", chunk.get("chapterPath"));
+        chunkPayload.put("pageNo", chunk.get("pageNo"));
+
+        String chunkType = toText(chunk.get("chunkType"));
+        chunkPayload.put("chunkType",
+                chunkType == null || chunkType.trim().isEmpty() ? "paragraph" : chunkType);
+
+        Long charCount = toLong(chunk.get("charCount"));
+        chunkPayload.put("charCount", charCount == null ? content.length() : charCount);
+        chunkPayload.put("vectorId", vectorId);
+        chunkPayload.put("contentVersion", contentVersion);
+
+        CreateTaskCommand cmd = new CreateTaskCommand(
+                "REEMBED", docId, operatorUserId, "REVIEW_EDIT");
         cmd.payload.put("chunkId", chunkId);
-        cmd.payload.put("chunkContentVersion", chunkContentVersion);
-        cmd.idempotencyKey = "REEMBED:" + chunkId + ":" + chunkContentVersion;
+        cmd.payload.put("chunkContentVersion", contentVersion);
+        cmd.payload.put("chunks", Collections.singletonList(chunkPayload));
+        cmd.idempotencyKey = "REEMBED:" + chunkId + ":" + contentVersion;
         return txService.createTask(cmd);
     }
 
@@ -202,6 +255,39 @@ class TaskCommandService {
         cmd.retryCount = failed.retryCount + 1;
         cmd.idempotencyKey = "RETRY:" + failed.id + ":" + cmd.retryCount;
         return createWithQuota(cmd);
+    }
+
+    private Map<String, Object> findActiveChunkForReembed(Long docId, Long chunkId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "select c.id as chunkId, c.doc_id as docId, d.kb_id as kbId, " +
+                        "c.version_no as versionNo, c.chunk_index as chunkIndex, " +
+                        "c.content as content, c.content_version as contentVersion, " +
+                        "c.chapter_path as chapterPath, c.page_no as pageNo, " +
+                        "c.chunk_type as chunkType, c.char_count as charCount, " +
+                        "c.vector_id as vectorId " +
+                        "from km_document_chunk c " +
+                        "join km_document d on d.id=c.doc_id " +
+                        "where c.id=? and c.doc_id=? and c.is_active=1 " +
+                        "and d.is_deleted=0 for update",
+                chunkId, docId);
+        if (rows.isEmpty()) {
+            throw new IllegalStateException(
+                    "Active chunk not found: docId=" + docId + ", chunkId=" + chunkId);
+        }
+        return rows.get(0);
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return value instanceof Number
+                ? ((Number) value).longValue()
+                : Long.valueOf(String.valueOf(value));
+    }
+
+    private String toText(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private Long createWithQuota(CreateTaskCommand cmd) {

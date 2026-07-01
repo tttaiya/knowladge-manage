@@ -2,9 +2,11 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
 <mapper namespace="com.km.admin.review.mapper.DocumentChunkMapper">
 
-    <resultMap id="ReviewChunkResultMap" type="com.km.admin.review.vo.ReviewChunkVO">
+    <resultMap id="ReviewChunkResultMap"
+               type="com.km.admin.review.vo.ReviewChunkVO">
         <id property="chunkId" column="chunk_id"/>
         <result property="chunkIndex" column="chunk_index"/>
         <result property="chapterPath" column="chapter_path"/>
@@ -17,7 +19,8 @@
         <result property="isEdited" column="is_edited"/>
     </resultMap>
 
-    <select id="selectReviewChunksByDocId" resultMap="ReviewChunkResultMap">
+    <select id="selectReviewChunksByDocId"
+            resultMap="ReviewChunkResultMap">
         select id as chunk_id,
                chunk_index,
                chapter_path,
@@ -34,26 +37,39 @@
         order by chunk_index asc
     </select>
 
-    <select id="selectChunkForEdit" resultType="java.util.Map">
+    <select id="selectChunkForEdit"
+            resultType="java.util.Map">
         select c.id as chunkId,
                c.doc_id as docId,
                d.kb_id as kbId,
-               c.content
+               c.version_no as versionNo,
+               c.chunk_index as chunkIndex,
+               c.content,
+               c.content_version as contentVersion,
+               c.chapter_path as chapterPath,
+               c.page_no as pageNo,
+               c.chunk_type as chunkType,
+               c.char_count as charCount,
+               c.vector_id as vectorId,
+               c.vector_status as vectorStatus
         from km_document_chunk c
-        join km_document d on d.id = c.doc_id
+        join km_document d
+          on d.id = c.doc_id
         where c.id = #{chunkId}
           and c.is_active = 1
+          and d.is_deleted = 0
     </select>
 
     <update id="updateChunkContent">
         update km_document_chunk
         set content = #{content},
             char_count = #{charCount},
+            content_version = content_version + 1,
             is_edited = 1,
             vector_status = 'PENDING',
             updated_at = now()
         where id = #{chunkId}
           and is_active = 1
     </update>
-</mapper>
 
+</mapper>

@@ -59,17 +59,33 @@ public class RetrievalServiceImpl implements RetrievalService {
 
         AiRetrievalRequest aiRequest = buildAiRequest(normalized, readyDocIds);
         AiRetrievalResponse aiResponse = aiRetrievalClient.search(aiRequest);
-        List<AiRetrievalCandidate> candidates = normalizeCandidates(aiResponse, normalized);
+        RetrievalMode actualMode = resolveActualMode(aiResponse, normalized.mode);
+        List<AiRetrievalCandidate> candidates =
+                normalizeCandidates(aiResponse, normalized, actualMode);
         if (candidates.isEmpty()) {
             return emptyResponse(begin);
         }
 
-        List<Long> chunkIds = candidates.stream()
-                .map(AiRetrievalCandidate::getChunkId)
+        List<String> vectorIds = candidates.stream()
+                .map(AiRetrievalCandidate::getVectorId)
+                .filter(StringUtils::hasText)
+                .distinct()
                 .collect(Collectors.toList());
-        Map<Long, ChunkDetailRecord> chunkMap = retrievalMapper.selectChunkDetailsByIds(chunkIds)
-                .stream()
-                .collect(Collectors.toMap(ChunkDetailRecord::getChunkId, item -> item));
+        if (vectorIds.isEmpty()) {
+            return emptyResponse(begin);
+        }
+
+        List<ChunkDetailRecord> chunkDetails =
+                retrievalMapper.selectChunkDetailsByVectorIds(vectorIds);
+        Map<String, ChunkDetailRecord> chunkMap =
+                new LinkedHashMap<String, ChunkDetailRecord>();
+        if (chunkDetails != null) {
+            for (ChunkDetailRecord detail : chunkDetails) {
+                if (detail != null && StringUtils.hasText(detail.getVectorId())) {
+                    chunkMap.put(detail.getVectorId(), detail);
+                }
+            }
+        }
         if (chunkMap.isEmpty()) {
             return emptyResponse(begin);
         }
@@ -80,11 +96,11 @@ public class RetrievalServiceImpl implements RetrievalService {
 
         List<RetrievalResultItem> records = new ArrayList<RetrievalResultItem>();
         for (AiRetrievalCandidate candidate : candidates) {
-            ChunkDetailRecord detail = chunkMap.get(candidate.getChunkId());
+            ChunkDetailRecord detail = chunkMap.get(candidate.getVectorId());
             if (detail == null) {
                 continue;
             }
-            records.add(toResultItem(detail, candidate, tagMap, normalized.query, begin));
+            records.add(toResultItem(detail, candidate, tagMap, normalized.query, begin, actualMode));
             if (records.size() >= normalized.topK) {
                 break;
             }
@@ -214,24 +230,40 @@ public class RetrievalServiceImpl implements RetrievalService {
         return aiRequest;
     }
 
-    private List<AiRetrievalCandidate> normalizeCandidates(AiRetrievalResponse response, NormalizedRequest request) {
+    private RetrievalMode resolveActualMode(AiRetrievalResponse response,
+                                                      RetrievalMode requestedMode) {
+        if (requestedMode == RetrievalMode.VECTOR_RERANK
+                && response != null
+                && "VECTOR_ONLY".equalsIgnoreCase(response.getDegradedMode())) {
+            return RetrievalMode.VECTOR_ONLY;
+        }
+        return requestedMode;
+    }
+
+    private List<AiRetrievalCandidate> normalizeCandidates(
+            AiRetrievalResponse response,
+            NormalizedRequest request,
+            final RetrievalMode actualMode) {
         if (response == null || response.getCandidates() == null) {
             return Collections.emptyList();
         }
+
         List<AiRetrievalCandidate> candidates = new ArrayList<AiRetrievalCandidate>();
         for (AiRetrievalCandidate candidate : response.getCandidates()) {
-            if (candidate == null || candidate.getChunkId() == null) {
+            if (candidate == null || !StringUtils.hasText(candidate.getVectorId())) {
                 continue;
             }
+
             double similarity = candidate.normalizedSimilarity();
             if (similarity < request.similarityThreshold) {
                 continue;
             }
             candidate.setSimilarityScore(similarity);
-            if (request.mode == RetrievalMode.VECTOR_RERANK) {
-                if (candidate.getRerankScore() == null || candidate.getRerankScore() < request.rerankThreshold) {
-                    continue;
-                }
+
+            if (actualMode == RetrievalMode.VECTOR_RERANK
+                    && (candidate.getRerankScore() == null
+                    || candidate.getRerankScore() < request.rerankThreshold)) {
+                continue;
             }
             candidates.add(candidate);
         }
@@ -239,13 +271,15 @@ public class RetrievalServiceImpl implements RetrievalService {
         candidates.sort(new Comparator<AiRetrievalCandidate>() {
             @Override
             public int compare(AiRetrievalCandidate left, AiRetrievalCandidate right) {
-                if (request.mode == RetrievalMode.VECTOR_RERANK) {
-                    int rerankCompare = compareNullableDoubleDesc(left.getRerankScore(), right.getRerankScore());
+                if (actualMode == RetrievalMode.VECTOR_RERANK) {
+                    int rerankCompare = compareNullableDoubleDesc(
+                            left.getRerankScore(), right.getRerankScore());
                     if (rerankCompare != 0) {
                         return rerankCompare;
                     }
                 }
-                return Double.compare(right.normalizedSimilarity(), left.normalizedSimilarity());
+                return Double.compare(
+                        right.normalizedSimilarity(), left.normalizedSimilarity());
             }
         });
         return candidates;
@@ -280,7 +314,8 @@ public class RetrievalServiceImpl implements RetrievalService {
                                              AiRetrievalCandidate candidate,
                                              Map<Long, List<String>> tagMap,
                                              String query,
-                                             long begin) {
+                                             long begin,
+                                             RetrievalMode actualMode) {
         RetrievalResultItem item = new RetrievalResultItem();
         item.setChunkId(detail.getChunkId());
         item.setDocId(detail.getDocId());
@@ -293,7 +328,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         item.setContent(detail.getContent());
         item.setSummary(buildSummary(detail.getContent(), query, 180));
         item.setSimilarityScore(candidate.normalizedSimilarity());
-        item.setRerankScore(candidate.getRerankScore());
+        item.setRerankScore(actualMode == RetrievalMode.VECTOR_RERANK
+                ? candidate.getRerankScore()
+                : null);
         item.setTags(tagMap.getOrDefault(detail.getDocId(), Collections.<String>emptyList()));
         item.setElapsedMs(System.currentTimeMillis() - begin);
         return item;

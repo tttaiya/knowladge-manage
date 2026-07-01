@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS km_document_chunk (
   version_no BIGINT NOT NULL DEFAULT 1,
   chunk_index INT NOT NULL DEFAULT 0,
   content TEXT NOT NULL,
+  content_version BIGINT NOT NULL DEFAULT 1,
   chapter_path VARCHAR(512) DEFAULT NULL,
   page_no INT DEFAULT NULL,
   chunk_type VARCHAR(32) DEFAULT NULL,
