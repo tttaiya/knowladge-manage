@@ -6,7 +6,15 @@ from pathlib import Path
 from app.schemas import ParsedBlock, TaskPayload
 from app.services.ocr import ocr_image
 from app.services.path_guard import MAX_PDF_PAGES
-from .text_utils import clean_text, ensure_file_exists, guess_extension, read_text_file, update_chapter_path
+from .text_utils import (
+    clean_document_text,
+    clean_pdf_pages,
+    clean_text,
+    ensure_file_exists,
+    guess_extension,
+    read_text_file,
+    update_chapter_path,
+)
 
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 TEXT_EXTENSIONS = {"txt", "md"}
@@ -72,9 +80,11 @@ def parse_pdf(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
         if doc.page_count == 0:
             raise ValueError("PDF 不包含可解析页面")
 
+        page_texts = clean_pdf_pages(
+            [page.get_text("text") or "" for page in doc]
+        )
         blocks: list[ParsedBlock] = []
-        for page_index, page in enumerate(doc, start=1):
-            text = clean_text(page.get_text("text") or "")
+        for page_index, text in enumerate(page_texts, start=1):
             if text:
                 blocks.append(
                     ParsedBlock(
@@ -91,24 +101,27 @@ def parse_pdf(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
             return blocks
 
         # 扫描 PDF：文本层很少，按页渲染图片后 OCR；临时目录自动清理。
-        ocr_blocks: list[ParsedBlock] = []
+        ocr_page_texts: list[str] = []
         with tempfile.TemporaryDirectory(prefix="km_pdf_ocr_") as tmp_dir:
             for page_index, page in enumerate(doc, start=1):
                 pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
                 image_path = Path(tmp_dir) / f"page_{page_index}.png"
                 pix.save(str(image_path))
                 text, _ = ocr_image(image_path)
-                text = clean_text(text)
-                if text:
-                    ocr_blocks.append(
-                        ParsedBlock(
-                            content=text,
-                            pageNo=page_index,
-                            blockType="ocr",
-                            chapterPath=None,
-                            charCount=len(text),
-                        )
+                ocr_page_texts.append(text or "")
+
+        ocr_blocks: list[ParsedBlock] = []
+        for page_index, text in enumerate(clean_pdf_pages(ocr_page_texts), start=1):
+            if text:
+                ocr_blocks.append(
+                    ParsedBlock(
+                        content=text,
+                        pageNo=page_index,
+                        blockType="ocr",
+                        chapterPath=None,
+                        charCount=len(text),
                     )
+                )
 
         return ocr_blocks
 
@@ -124,7 +137,7 @@ def parse_docx(path: Path) -> list[ParsedBlock]:
     heading_levels: list[str] = []
 
     for paragraph in doc.paragraphs:
-        text = clean_text(paragraph.text or "")
+        text = clean_document_text(paragraph.text or "")
         if not text:
             continue
 
@@ -178,7 +191,7 @@ def parse_docx(path: Path) -> list[ParsedBlock]:
 
 
 def parse_text(path: Path) -> list[ParsedBlock]:
-    text = clean_text(read_text_file(path))
+    text = clean_document_text(read_text_file(path))
     return [ParsedBlock(content=text, pageNo=1, blockType="paragraph", chapterPath=None, charCount=len(text))] if text else []
 
 
@@ -186,7 +199,7 @@ def parse_image(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
     if not payload.enable_ocr:
         raise RuntimeError("图片文件必须启用 OCR 才能解析。")
     text, _ = ocr_image(path)
-    text = clean_text(text)
+    text = clean_document_text(text)
     return [ParsedBlock(content=text, pageNo=1, blockType="ocr", chapterPath=None, charCount=len(text))] if text else []
 
 
@@ -203,7 +216,7 @@ def parse_pptx(path: Path) -> list[ParsedBlock]:
         for shape in slide.shapes:
             if hasattr(shape, "text") and shape.text:
                 texts.append(shape.text)
-        text = clean_text("\n".join(texts))
+        text = clean_document_text("\n".join(texts))
         if text:
             blocks.append(ParsedBlock(content=text, pageNo=index, blockType="paragraph", charCount=len(text)))
     return blocks

@@ -133,8 +133,8 @@ public class DocumentProcessingService {
         } finally {
             if (heartbeat != null) heartbeat.stop();
             if (permit) permitManager.release(msg.taskId, claimToken);
-            // F4 commit #23：清理暂存文件（即使失败也要清）
-            if (stagedFilePath != null) {
+             //F4 P0修复：只要进入 PROCESS/REPROCESS 暂存流程，无论 stage 是否成功，都尝试清理任务临时目录，避免异常时残留空目录
+            if (heavy) {
                 taskFileStagingService.cleanup(msg.taskId);
             }
         }
