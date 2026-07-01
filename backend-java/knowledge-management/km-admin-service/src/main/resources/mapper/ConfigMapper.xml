@@ -59,10 +59,12 @@
         SELECT
             MAX(CASE WHEN config_key = 'parser.api_base'             THEN config_value END) AS apiBase,
             MAX(CASE WHEN config_key = 'parser.paddleocr_enabled'    THEN config_value END) AS paddleocrEnabled,
+            MAX(CASE WHEN config_key = 'parser.chunk_size'            THEN config_value END) AS chunkSize,
+            MAX(CASE WHEN config_key = 'parser.chunk_overlap'         THEN config_value END) AS chunkOverlap,
             MAX(CASE WHEN config_key = 'parser.max_concurrent_tasks' THEN config_value END) AS maxConcurrentTasks,
             MAX(CASE WHEN config_key = 'parser.max_retry_count'      THEN config_value END) AS maxRetryCount,
             MAX(CASE WHEN config_key = 'parser.timeout_seconds'      THEN config_value END) AS timeoutSeconds
           FROM km_system_config
-         WHERE config_key IN ('parser.api_base','parser.paddleocr_enabled','parser.max_concurrent_tasks','parser.max_retry_count','parser.timeout_seconds')
+         WHERE config_key IN ('parser.api_base','parser.paddleocr_enabled','parser.chunk_size','parser.chunk_overlap','parser.max_concurrent_tasks','parser.max_retry_count','parser.timeout_seconds')
     </select>
 </mapper>

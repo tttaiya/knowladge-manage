@@ -106,6 +106,12 @@
           <el-form-item label="PaddleOCR 开关" required>
             <el-switch v-model="parserForm.paddleocrEnabled" active-text="开启" inactive-text="关闭" />
           </el-form-item>
+          <el-form-item label="切片大小" required>
+            <el-input-number v-model="parserForm.chunkSize" :min="100" :max="5000" :step="50" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="切片重叠" required>
+            <el-input-number v-model="parserForm.chunkOverlap" :min="0" :max="1000" :step="10" controls-position="right" />
+          </el-form-item>
           <el-form-item label="最大并发任务数" required>
             <el-input-number v-model="parserForm.maxConcurrentTasks" :min="1" :max="20" :step="1" controls-position="right" />
             <!-- 默认 4 由后端返回；Worker DynamicConfigHolder 热加载，R28 -->
@@ -179,6 +185,8 @@ const rerankForm = reactive({
 const parserForm = reactive({
   apiBase: '',
   paddleocrEnabled: false,
+  chunkSize: 500,
+  chunkOverlap: 50,
   maxConcurrentTasks: 4,
   maxRetryCount: 3,
   timeoutSeconds: 30,
@@ -232,6 +240,18 @@ function assertRerank(): boolean {
 function assertParser(): boolean {
   if (parserForm.apiBase && !isValidUrl(parserForm.apiBase)) {
     ElMessage.warning('解析服务地址格式非法')
+    return false
+  }
+  if (!Number.isInteger(parserForm.chunkSize) || parserForm.chunkSize < 100 || parserForm.chunkSize > 5000) {
+    ElMessage.warning('切片大小必须为 100-5000 的整数')
+    return false
+  }
+  if (!Number.isInteger(parserForm.chunkOverlap) || parserForm.chunkOverlap < 0 || parserForm.chunkOverlap > 1000) {
+    ElMessage.warning('切片重叠必须为 0-1000 的整数')
+    return false
+  }
+  if (parserForm.chunkOverlap >= parserForm.chunkSize) {
+    ElMessage.warning('切片重叠必须小于切片大小')
     return false
   }
   if (!Number.isInteger(parserForm.maxConcurrentTasks) || parserForm.maxConcurrentTasks < 1 || parserForm.maxConcurrentTasks > 20) {

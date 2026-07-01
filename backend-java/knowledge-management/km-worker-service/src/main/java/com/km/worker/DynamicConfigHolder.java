@@ -5,6 +5,7 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -26,6 +27,8 @@ public class DynamicConfigHolder {
 
     private final ObjectMapper objectMapper;
     private volatile int maxConcurrentTasks;
+    private volatile int chunkSize = 500;
+    private volatile int chunkOverlap = 50;
     private volatile boolean initialized = false;
     private volatile long configVersion = 0L;
 
@@ -48,6 +51,37 @@ public class DynamicConfigHolder {
             throw new IllegalArgumentException("maxConcurrentTasks out of range [1, 100]: " + n);
         }
         this.maxConcurrentTasks = n;
+    }
+
+    public int chunkSize() {
+        return chunkSize;
+    }
+
+    public int chunkOverlap() {
+        return chunkOverlap;
+    }
+
+    public void setChunkConfig(int chunkSize, int chunkOverlap) {
+        validateChunkConfig(chunkSize, chunkOverlap);
+        this.chunkSize = chunkSize;
+        this.chunkOverlap = chunkOverlap;
+    }
+
+    public String applyParserDefaults(String taskPayloadJson) {
+        String source = taskPayloadJson == null || taskPayloadJson.trim().isEmpty() ? "{}" : taskPayloadJson;
+        try {
+            Map<String, Object> payload = objectMapper.readValue(source, Map.class);
+            if (payload == null) {
+                payload = new LinkedHashMap<>();
+            }
+            payload.putIfAbsent("chunkSize", chunkSize);
+            if (!payload.containsKey("overlap") && !payload.containsKey("chunkOverlap")) {
+                payload.put("overlap", chunkOverlap);
+            }
+            return objectMapper.writeValueAsString(payload);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return source;
+        }
     }
 
     public void markInitialized() {
@@ -81,13 +115,25 @@ public class DynamicConfigHolder {
             if (!(values instanceof Map)) {
                 return;
             }
-            Object max = ((Map) values).get("parser.max_concurrent_tasks");
-            if (max == null) {
-                return;
+            Map valueMap = (Map) values;
+            Integer max = parseInt(valueMap.get("parser.max_concurrent_tasks"));
+            Integer nextChunkSize = parseInt(valueMap.get("parser.chunk_size"));
+            Integer nextChunkOverlap = parseInt(valueMap.get("parser.chunk_overlap"));
+            boolean changed = false;
+
+            int candidateChunkSize = nextChunkSize == null ? chunkSize : nextChunkSize;
+            int candidateChunkOverlap = nextChunkOverlap == null ? chunkOverlap : nextChunkOverlap;
+            if (nextChunkSize != null || nextChunkOverlap != null) {
+                setChunkConfig(candidateChunkSize, candidateChunkOverlap);
+                changed = true;
             }
-            int n = Integer.parseInt(max.toString());
-            setMaxConcurrentTasks(n); // 范围校验
-            configVersion = incomingVersion;
+            if (max != null) {
+                setMaxConcurrentTasks(max);
+                changed = true;
+            }
+            if (changed) {
+                configVersion = incomingVersion;
+            }
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             // R26：JSON 解析失败抛 AmqpRejectAndDontRequeueException → DLQ
             throw new AmqpRejectAndDontRequeueException("Invalid config event JSON", e);
@@ -96,6 +142,22 @@ public class DynamicConfigHolder {
             // 数值非法 / 范围非法 → 走 DLQ
             throw new AmqpRejectAndDontRequeueException(
                     "Invalid config event value: " + e.getMessage(), e);
+        }
+    }
+
+    private Integer parseInt(Object value) {
+        return value == null ? null : Integer.parseInt(value.toString());
+    }
+
+    private void validateChunkConfig(int chunkSize, int chunkOverlap) {
+        if (chunkSize < 100 || chunkSize > 5000) {
+            throw new IllegalArgumentException("chunkSize out of range [100, 5000]: " + chunkSize);
+        }
+        if (chunkOverlap < 0 || chunkOverlap > 1000) {
+            throw new IllegalArgumentException("chunkOverlap out of range [0, 1000]: " + chunkOverlap);
+        }
+        if (chunkOverlap >= chunkSize) {
+            throw new IllegalArgumentException("chunkOverlap must be less than chunkSize");
         }
     }
 }

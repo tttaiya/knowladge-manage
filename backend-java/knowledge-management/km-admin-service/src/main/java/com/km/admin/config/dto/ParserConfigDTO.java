@@ -6,6 +6,8 @@ package com.km.admin.config.dto;
 public class ParserConfigDTO {
     private String apiBase;
     private boolean paddleocrEnabled;
+    private int chunkSize;
+    private int chunkOverlap;
     private int maxConcurrentTasks;
     private int maxRetryCount;
     private int timeoutSeconds;
@@ -15,6 +17,12 @@ public class ParserConfigDTO {
 
     public boolean isPaddleocrEnabled() { return paddleocrEnabled; }
     public void setPaddleocrEnabled(boolean paddleocrEnabled) { this.paddleocrEnabled = paddleocrEnabled; }
+
+    public int getChunkSize() { return chunkSize; }
+    public void setChunkSize(int chunkSize) { this.chunkSize = chunkSize; }
+
+    public int getChunkOverlap() { return chunkOverlap; }
+    public void setChunkOverlap(int chunkOverlap) { this.chunkOverlap = chunkOverlap; }
 
     public int getMaxConcurrentTasks() { return maxConcurrentTasks; }
     public void setMaxConcurrentTasks(int maxConcurrentTasks) { this.maxConcurrentTasks = maxConcurrentTasks; }

@@ -109,12 +109,14 @@ public class ConfigServiceImpl implements ConfigService {
         validateParserConfig(dto);
         updateValue("parser.api_base", dto.getApiBase() == null ? "" : dto.getApiBase());
         updateValue("parser.paddleocr_enabled", String.valueOf(dto.isPaddleocrEnabled()));
+        updateValue("parser.chunk_size", String.valueOf(dto.getChunkSize()));
+        updateValue("parser.chunk_overlap", String.valueOf(dto.getChunkOverlap()));
         updateValue("parser.max_concurrent_tasks", String.valueOf(dto.getMaxConcurrentTasks()));
         updateValue("parser.max_retry_count", String.valueOf(dto.getMaxRetryCount()));
         updateValue("parser.timeout_seconds", String.valueOf(dto.getTimeoutSeconds()));
 
         long version = nextConfigVersion();
-        writeAudit("parser", version, "updated: parser.api_base, parser.paddleocr_enabled, parser.max_concurrent_tasks, parser.max_retry_count, parser.timeout_seconds");
+        writeAudit("parser", version, "updated: parser.api_base, parser.paddleocr_enabled, parser.chunk_size, parser.chunk_overlap, parser.max_concurrent_tasks, parser.max_retry_count, parser.timeout_seconds");
         registerAfterCommit("parser", collectSafeConfigValues(), version);
 
         return dto;
@@ -287,6 +289,11 @@ public class ConfigServiceImpl implements ConfigService {
             throw new IllegalArgumentException("parser config must not be null");
         }
         validateOptionalHttpUrl(dto.getApiBase(), "parser.api_base");
+        requireRange(dto.getChunkSize(), "parser.chunk_size", 100, 5000);
+        requireRange(dto.getChunkOverlap(), "parser.chunk_overlap", 0, 1000);
+        if (dto.getChunkOverlap() >= dto.getChunkSize()) {
+            throw new IllegalArgumentException("parser.chunk_overlap must be less than parser.chunk_size");
+        }
         requireRange(dto.getMaxConcurrentTasks(), "parser.max_concurrent_tasks", 1, 20);
         requireRange(dto.getMaxRetryCount(), "parser.max_retry_count", 0, 10);
         requireRange(dto.getTimeoutSeconds(), "parser.timeout_seconds", 1, 600);

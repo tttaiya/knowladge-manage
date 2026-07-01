@@ -28,6 +28,8 @@ export interface RerankConfig {
 export interface ParserConfig {
   apiBase: string
   paddleocrEnabled: boolean
+  chunkSize: number
+  chunkOverlap: number
   maxConcurrentTasks: number
   maxRetryCount: number
   timeoutSeconds: number
