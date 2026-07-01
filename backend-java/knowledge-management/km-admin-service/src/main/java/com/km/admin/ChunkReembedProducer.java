@@ -22,6 +22,16 @@ public class ChunkReembedProducer {
             Long kbId,
             Long contentVersion
     ) {
+        send(chunkId, docId, kbId, null, contentVersion);
+    }
+
+    public void send(
+            Long chunkId,
+            Long docId,
+            Long kbId,
+            String operatorUserId,
+            Long contentVersion
+    ) {
         if (chunkId == null) {
             throw new IllegalArgumentException(
                     "chunkId 不能为空"
@@ -42,16 +52,13 @@ public class ChunkReembedProducer {
         }
 
         /*
-         * 人工审核编辑属于系统触发任务，
-         * operatorUserId 保持 null。
-         *
          * kbId 由 TaskCommandService 根据 docId、
          * chunkId 从数据库读取并校验。
          */
         taskCommandService.createReembedTask(
                 docId,
                 chunkId,
-                null,
+                operatorUserId,
                 contentVersion
         );
     }

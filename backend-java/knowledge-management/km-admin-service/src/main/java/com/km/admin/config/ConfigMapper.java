@@ -1,5 +1,7 @@
 package com.km.admin.config;
 
+import com.km.admin.config.dto.ConnectionTestRequest;
+import com.km.admin.config.dto.ConnectionTestResult;
 import com.km.admin.config.dto.EmbeddingConfigDTO;
 import com.km.admin.config.dto.ParserConfigDTO;
 import com.km.admin.config.dto.RerankConfigDTO;
@@ -9,6 +11,10 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 系统配置 Mapper（XML：classpath:mapper/ConfigMapper.xml）。
+ * R11：字段名严格对齐 km_system_config 表。
+ */
 @Mapper
 public interface ConfigMapper {
 
@@ -19,12 +25,7 @@ public interface ConfigMapper {
     int updateConfigValue(@Param("configKey") String configKey,
                           @Param("configValue") String configValue);
 
-    int insertConfigChangeLog(@Param("operatorId") String operatorId,
-                              @Param("operatorName") String operatorName,
-                              @Param("configGroup") String configGroup,
-                              @Param("configVersion") Long configVersion,
-                              @Param("changeSummary") String changeSummary);
-
+    // 内部 dto 复用
     EmbeddingConfigDTO loadEmbeddingConfig();
 
     RerankConfigDTO loadRerankConfig();

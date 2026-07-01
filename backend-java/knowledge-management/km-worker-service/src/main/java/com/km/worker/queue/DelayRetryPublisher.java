@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.km.worker.messaging.KmTaskMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +34,11 @@ public class DelayRetryPublisher {
         try {
             String routing = "REPROCESS".equals(msg.taskType) ? "km.doc.reprocess.retry" : "km.doc.process.retry";
             CorrelationData cd = new CorrelationData("retry-" + msg.taskId + "-" + System.currentTimeMillis());
-            rabbitTemplate.convertAndSend("km.exchange", routing, objectMapper.writeValueAsString(msg), cd);
+            rabbitTemplate.send("km.exchange", routing, MessageBuilder
+                    .withBody(objectMapper.writeValueAsBytes(msg))
+                    .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                    .setContentEncoding("UTF-8")
+                    .build(), cd);
             CorrelationData.Confirm confirm = cd.getFuture().get(10, TimeUnit.SECONDS);
             if (confirm == null || !confirm.isAck()) {
                 throw new IllegalStateException("retry confirm failed");

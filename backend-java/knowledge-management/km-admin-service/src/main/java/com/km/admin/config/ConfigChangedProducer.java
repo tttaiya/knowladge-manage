@@ -33,13 +33,8 @@ public class ConfigChangedProducer {
     private ObjectMapper objectMapper;
 
     public void publishConfigChanged(String configGroup, Map<String, String> values) {
-        publishConfigChanged(configGroup, values, System.currentTimeMillis());
-    }
-
-    public void publishConfigChanged(String configGroup, Map<String, String> values, Long configVersion) {
         ConfigChangedEvent event = new ConfigChangedEvent();
         event.setEventId(UUID.randomUUID().toString());
-        event.setConfigVersion(configVersion == null ? System.currentTimeMillis() : configVersion);
         event.setOccurredAt(Instant.now().toString());
         event.setSource("km-admin");
         event.setConfigGroup(configGroup);

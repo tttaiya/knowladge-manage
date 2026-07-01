@@ -53,9 +53,8 @@
         limit 1
     </select>
 
-    <insert id="insert" parameterType="com.km.admin.review.entity.ReviewRecord">
+    <insert id="insert" parameterType="com.km.admin.review.entity.ReviewRecord" useGeneratedKeys="true" keyProperty="id">
         insert into km_review_record (doc_id, action, comment, operator_user_id, operator_name, created_at)
-        values (#{docId}, #{action}, #{comment}, coalesce(#{operatorUserId}, 0), #{operatorName}, #{createdAt})
+        values (#{docId}, #{action}, #{comment}, #{operatorUserId}, #{operatorName}, #{createdAt})
     </insert>
 </mapper>
-

@@ -81,6 +81,25 @@
           and is_deleted = 0
     </select>
 
+    <select id="countActiveChunks" resultType="java.lang.Long">
+        select count(1)
+        from km_document_chunk c
+        join km_document d on d.id = c.doc_id
+        where c.doc_id = #{docId}
+          and c.is_active = 1
+          and c.version_no = d.current_version_no
+    </select>
+
+    <select id="countNotReadyActiveChunks" resultType="java.lang.Long">
+        select count(1)
+        from km_document_chunk c
+        join km_document d on d.id = c.doc_id
+        where c.doc_id = #{docId}
+          and c.is_active = 1
+          and c.version_no = d.current_version_no
+          and coalesce(c.vector_status, '') != 'READY'
+    </select>
+
     <update id="updateDocumentStatus">
         update km_document
         set document_status = #{status},
@@ -88,5 +107,9 @@
         where id = #{docId}
           and is_deleted = 0
     </update>
-</mapper>
 
+    <insert id="insertStatusLog">
+        insert into km_document_status_log(doc_id, stage, status, message, created_at)
+        values(#{docId}, #{stage}, #{status}, #{message}, now())
+    </insert>
+</mapper>

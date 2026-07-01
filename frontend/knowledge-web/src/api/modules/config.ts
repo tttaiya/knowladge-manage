@@ -26,21 +26,16 @@ export interface RerankConfig {
 }
 
 export interface ParserConfig {
-  apiBase: string
   paddleocrEnabled: boolean
-  chunkSize: number
-  chunkOverlap: number
   maxConcurrentTasks: number
   maxRetryCount: number
   timeoutSeconds: number
 }
 
 export interface ConnectionTestPayload {
-  type: 'embedding' | 'rerank' | 'parser' | 'ocr'
+  type: 'embedding' | 'rerank' | 'ocr'
   apiBase: string
   apiKey?: string
-  model?: string
-  timeoutSeconds?: number
 }
 
 export interface ConnectionTestResult {
@@ -55,7 +50,7 @@ export interface ConnectionTestResult {
  */
 function stripMaskedApiKey<T extends { apiKey?: string }>(payload: T): T {
   const data = { ...payload }
-  if (data.apiKey === undefined || data.apiKey === '********') {
+  if (!data.apiKey || data.apiKey === '********') {
     delete data.apiKey
   }
   return data

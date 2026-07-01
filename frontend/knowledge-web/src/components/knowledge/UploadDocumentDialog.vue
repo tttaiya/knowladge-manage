@@ -18,8 +18,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  success: []
-  'update:visible': [value: boolean]
+  (e: 'success'): void
+  (e: 'update:visible', value: boolean): void
 }>()
 
 function closeDialog() {

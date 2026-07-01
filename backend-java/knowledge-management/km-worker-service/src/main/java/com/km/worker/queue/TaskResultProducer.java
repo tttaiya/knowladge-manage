@@ -6,6 +6,8 @@ import com.km.worker.messaging.KmTaskMessage;
 import com.km.worker.messaging.KmTaskResultMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,7 +89,11 @@ public class TaskResultProducer {
     private void send(KmTaskResultMessage msg) {
         try {
             CorrelationData cd = new CorrelationData("result-" + msg.eventId);
-            rabbitTemplate.convertAndSend("km.exchange", "km.task.result", objectMapper.writeValueAsString(msg), cd);
+            rabbitTemplate.send("km.exchange", "km.task.result", MessageBuilder
+                    .withBody(objectMapper.writeValueAsBytes(msg))
+                    .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                    .setContentEncoding("UTF-8")
+                    .build(), cd);
             CorrelationData.Confirm confirm = cd.getFuture().get(10, TimeUnit.SECONDS);
             if (confirm == null || !confirm.isAck()) {
                 throw new IllegalStateException(confirm == null ? "result confirm timeout" : confirm.getReason());

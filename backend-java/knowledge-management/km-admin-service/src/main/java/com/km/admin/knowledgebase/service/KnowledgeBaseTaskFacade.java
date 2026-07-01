@@ -6,6 +6,8 @@ import com.km.admin.knowledgebase.entity.KnowledgeBase;
 import com.km.admin.knowledgebase.vo.KnowledgeBaseSnapshotVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -240,7 +242,11 @@ public class KnowledgeBaseTaskFacade {
             body.put("taskPayloadJson", parseJson(payloadJson));
 
             CorrelationData cd = new CorrelationData("kb-reprocess-" + taskId + "-" + System.currentTimeMillis());
-            rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, objectMapper.writeValueAsString(body), cd);
+            rabbitTemplate.send(EXCHANGE, ROUTING_KEY, MessageBuilder
+                    .withBody(objectMapper.writeValueAsBytes(body))
+                    .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                    .setContentEncoding("UTF-8")
+                    .build(), cd);
             CorrelationData.Confirm confirm = cd.getFuture().get(ackTimeoutSeconds, TimeUnit.SECONDS);
             if (confirm != null && confirm.isAck()) {
                 jdbcTemplate.update(

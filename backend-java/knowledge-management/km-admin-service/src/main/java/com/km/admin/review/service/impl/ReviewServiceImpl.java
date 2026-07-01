@@ -1,5 +1,6 @@
 package com.km.admin.review.service.impl;
 
+import com.km.admin.DocumentTaskFacade;
 import com.km.admin.review.common.PageResult;
 import com.km.admin.review.dto.ApproveReviewRequest;
 import com.km.admin.review.dto.RejectReviewRequest;
@@ -23,13 +24,16 @@ public class ReviewServiceImpl implements ReviewService {
     private final DocumentMapper documentMapper;
     private final DocumentChunkMapper documentChunkMapper;
     private final ReviewRecordMapper reviewRecordMapper;
+    private final DocumentTaskFacade documentTaskFacade;
 
     public ReviewServiceImpl(DocumentMapper documentMapper,
                              DocumentChunkMapper documentChunkMapper,
-                             ReviewRecordMapper reviewRecordMapper) {
+                             ReviewRecordMapper reviewRecordMapper,
+                             DocumentTaskFacade documentTaskFacade) {
         this.documentMapper = documentMapper;
         this.documentChunkMapper = documentChunkMapper;
         this.reviewRecordMapper = reviewRecordMapper;
+        this.documentTaskFacade = documentTaskFacade;
     }
 
     @Override
@@ -57,13 +61,22 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int approveDocument(Long docId, ApproveReviewRequest request) {
+    public int approveDocument(Long docId, ApproveReviewRequest request, String operatorUserId, String operatorName) {
+        if (isBlank(operatorUserId)) {
+            return -3;
+        }
+
         String status = documentMapper.selectDocumentStatus(docId);
         if (status == null) {
             return 0;
         }
         if (!"PENDING_REVIEW".equals(status)) {
             return -1;
+        }
+        Long activeChunks = documentMapper.countActiveChunks(docId);
+        Long notReadyChunks = documentMapper.countNotReadyActiveChunks(docId);
+        if (activeChunks == null || activeChunks <= 0 || (notReadyChunks != null && notReadyChunks > 0)) {
+            return -4;
         }
 
         int updated = documentMapper.updateDocumentStatus(docId, "READY");
@@ -75,14 +88,21 @@ public class ReviewServiceImpl implements ReviewService {
         reviewRecord.setDocId(docId);
         reviewRecord.setAction("APPROVE");
         reviewRecord.setComment(request == null ? null : request.getComment());
+        reviewRecord.setOperatorUserId(operatorUserId);
+        reviewRecord.setOperatorName(operatorName);
         reviewRecord.setCreatedAt(LocalDateTime.now());
         reviewRecordMapper.insert(reviewRecord);
+        documentMapper.insertStatusLog(docId, "REVIEW", "READY", "approved by " + displayName(operatorName, operatorUserId));
         return updated;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int rejectDocument(Long docId, RejectReviewRequest request) {
+    public int rejectDocument(Long docId, RejectReviewRequest request, String operatorUserId, String operatorName) {
+        if (isBlank(operatorUserId)) {
+            return -3;
+        }
+
         String reason = request == null ? null : request.getReason();
         if (reason == null || reason.trim().isEmpty()) {
             return -2;
@@ -105,9 +125,20 @@ public class ReviewServiceImpl implements ReviewService {
         reviewRecord.setDocId(docId);
         reviewRecord.setAction("REJECT");
         reviewRecord.setComment(reason);
+        reviewRecord.setOperatorUserId(operatorUserId);
+        reviewRecord.setOperatorName(operatorName);
         reviewRecord.setCreatedAt(LocalDateTime.now());
         reviewRecordMapper.insert(reviewRecord);
+        documentMapper.insertStatusLog(docId, "REVIEW", "REVIEW_REJECTED", reason.trim());
+        documentTaskFacade.createReviewRejectedReprocessTask(docId, reviewRecord.getId(), operatorUserId);
         return updated;
     }
-}
 
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String displayName(String operatorName, String operatorUserId) {
+        return isBlank(operatorName) ? operatorUserId : operatorName;
+    }
+}

@@ -3,7 +3,7 @@
     :model-value="visible"
     :title="mode === 'create' ? '新建知识库' : '编辑知识库'"
     width="640"
-    @update:model-value="(v) => emit('update:visible', v)"
+    @update:model-value="(v: boolean) => emit('update:visible', v)"
     @close="onClose"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">

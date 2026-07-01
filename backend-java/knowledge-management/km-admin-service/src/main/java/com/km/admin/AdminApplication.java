@@ -6,11 +6,15 @@ import com.km.admin.task.dto.CreateProcessTaskRequest;
 import com.km.admin.task.dto.CreateReembedTaskRequest;
 import com.km.admin.task.dto.CreateReviewReprocessTaskRequest;
 import com.rabbitmq.client.Channel;
+import org.apache.ibatis.annotations.Mapper;
 import org.mybatis.spring.annotation.MapperScan;
+import org.mybatis.spring.annotation.MapperScans;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -49,11 +53,13 @@ import java.util.concurrent.TimeUnit;
 @SpringBootApplication
 @EnableScheduling
 @EnableRabbit
-@MapperScan({
-    "com.km.admin.review.mapper",
-    "com.km.admin.document.mapper",
-    "com.km.admin.config",            // F6：钱小晓配置模块（commit #15；ConfigMapper.java 在 com.km.admin.config 包）
-    "com.km.admin.knowledgebase.mapper" // F2：邱子悦知识库管理（commit #28；KnowledgeBaseMapper.java 迁入新包）
+@MapperScans({
+    @MapperScan({
+        "com.km.admin.review.mapper",
+        "com.km.admin.document.mapper",
+        "com.km.admin.knowledgebase.mapper"
+    }),
+    @MapperScan(value = "com.km.admin.config", annotationClass = Mapper.class)
 })
 public class AdminApplication {
     public static void main(String[] args) {
@@ -452,7 +458,11 @@ class TaskDispatchPublisher {
         }
         try {
             CorrelationData cd = new CorrelationData("task-" + msg.taskId + "-" + System.currentTimeMillis());
-            rabbitTemplate.convertAndSend(exchange, routingKey, objectMapper.writeValueAsString(msg), cd);
+            rabbitTemplate.send(exchange, routingKey, MessageBuilder
+                    .withBody(objectMapper.writeValueAsBytes(msg))
+                    .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                    .setContentEncoding(StandardCharsets.UTF_8.name())
+                    .build(), cd);
             CorrelationData.Confirm confirm = cd.getFuture().get(10, TimeUnit.SECONDS);
             if (confirm != null && confirm.isAck()) {
                 jdbcTemplate.update("update km_document_process_task set dispatch_status='PUBLISHED', published_at=now(), updated_at=now() where id=? and task_status='QUEUED'",

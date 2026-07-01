@@ -33,13 +33,12 @@ public class ChunkEditServiceImpl implements ChunkEditService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int updateChunk(
-            Long chunkId,
-            UpdateChunkRequest request
-    ) {
-        String content =
-                request == null ? null : request.getContent();
+    public int updateChunk(Long chunkId, UpdateChunkRequest request, String operatorUserId, String operatorName) {
+        if (operatorUserId == null || operatorUserId.trim().isEmpty()) {
+            return -3;
+        }
 
+        String content = request == null ? null : request.getContent();
         if (content == null || content.trim().isEmpty()) {
             return -1;
         }
@@ -72,6 +71,8 @@ public class ChunkEditServiceImpl implements ChunkEditService {
         editLog.setBeforeContent(beforeContent);
         editLog.setAfterContent(content);
         editLog.setAction("EDIT");
+        editLog.setOperatorUserId(operatorUserId);
+        editLog.setOperatorName(operatorName);
         editLog.setCreatedAt(LocalDateTime.now());
         chunkEditLogMapper.insert(editLog);
 
@@ -116,6 +117,7 @@ public class ChunkEditServiceImpl implements ChunkEditService {
                 chunkId,
                 docId,
                 kbId,
+                operatorUserId,
                 contentVersion
         );
 

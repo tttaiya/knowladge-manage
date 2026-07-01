@@ -20,7 +20,15 @@ public interface DocumentMapper {
 
     String selectDocumentStatus(@Param("docId") Long docId);
 
+    Long countActiveChunks(@Param("docId") Long docId);
+
+    Long countNotReadyActiveChunks(@Param("docId") Long docId);
+
     int updateDocumentStatus(@Param("docId") Long docId,
                              @Param("status") String status);
-}
 
+    int insertStatusLog(@Param("docId") Long docId,
+                        @Param("stage") String stage,
+                        @Param("status") String status,
+                        @Param("message") String message);
+}

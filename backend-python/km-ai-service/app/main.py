@@ -5,7 +5,7 @@ F4 模块整合后的 km-ai-service 主入口（commit #21）。
 - 健康检查：/health 公开（容器探活无需 Token）
 - 内部接口：/internal/ai/* 强制 X-Internal-Token（commit #22 加固）
 """
-from fastapi import  FastAPI
+from fastapi import FastAPI
 
 from app.api.process import router as process_router
 from app.api.retrieval import router as retrieval_router
@@ -21,16 +21,3 @@ def health():
 # F4：杨家凤（commit #21 合并，#22 加固）
 app.include_router(process_router)
 app.include_router(retrieval_router)
-
-
-# F5：黄依诺负责，本期保留 Mock（Worker 联调过渡）；同样要求 Token 校验（R-F4-1）
-
-
-
-
-
-
-
-def delete_vectors_version(doc_id: int, version_no: int):
-    """TODO(F5): 黄依诺合并。"""
-    return {"docId": doc_id, "versionNo": version_no, "deleted": True}

@@ -11,7 +11,6 @@ import java.util.Map;
  */
 public class ConfigChangedEvent {
     private String eventId;
-    private Long configVersion;
     private String occurredAt;
     private String source;
     private String configGroup;
@@ -19,9 +18,6 @@ public class ConfigChangedEvent {
 
     public String getEventId() { return eventId; }
     public void setEventId(String eventId) { this.eventId = eventId; }
-
-    public Long getConfigVersion() { return configVersion; }
-    public void setConfigVersion(Long configVersion) { this.configVersion = configVersion; }
 
     public String getOccurredAt() { return occurredAt; }
     public void setOccurredAt(String occurredAt) { this.occurredAt = occurredAt; }

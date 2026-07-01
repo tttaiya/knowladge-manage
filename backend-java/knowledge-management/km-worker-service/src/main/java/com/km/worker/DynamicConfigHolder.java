@@ -102,17 +102,17 @@ public class DynamicConfigHolder {
         }
         try {
             Map<String, Object> map = objectMapper.readValue(eventJson, Map.class);
-            Object versionValue = map.get("configVersion");
-            long incomingVersion = versionValue == null ? System.currentTimeMillis() : Long.parseLong(versionValue.toString());
-            if (incomingVersion <= configVersion) {
-                return;
-            }
             String group = (String) map.get("configGroup");
             if (!"parser".equals(group)) {
                 return;
             }
             Object values = map.get("values");
             if (!(values instanceof Map)) {
+                return;
+            }
+            Object versionValue = map.get("configVersion");
+            long incomingVersion = versionValue == null ? System.currentTimeMillis() : Long.parseLong(versionValue.toString());
+            if (incomingVersion <= configVersion) {
                 return;
             }
             Map valueMap = (Map) values;

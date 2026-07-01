@@ -12,8 +12,7 @@ public interface ReviewService {
 
     ReviewDocumentDetailVO getReviewDocumentDetail(Long docId);
 
-    int approveDocument(Long docId, ApproveReviewRequest request);
+    int approveDocument(Long docId, ApproveReviewRequest request, String operatorUserId, String operatorName);
 
-    int rejectDocument(Long docId, RejectReviewRequest request);
+    int rejectDocument(Long docId, RejectReviewRequest request, String operatorUserId, String operatorName);
 }
-

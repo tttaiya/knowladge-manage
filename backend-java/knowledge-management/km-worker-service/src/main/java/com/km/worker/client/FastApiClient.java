@@ -2,9 +2,9 @@ package com.km.worker.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.km.worker.DynamicConfigHolder;
 import com.km.worker.exception.AiStageException;
 import com.km.worker.messaging.KmTaskMessage;
-import com.km.worker.DynamicConfigHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
