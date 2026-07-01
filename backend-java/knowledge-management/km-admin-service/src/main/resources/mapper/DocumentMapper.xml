@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.review.mapper.DocumentMapper">
+
+    <resultMap id="PendingReviewDocumentResultMap" type="com.km.admin.review.vo.PendingReviewDocumentVO">
+        <id property="docId" column="doc_id"/>
+        <result property="kbId" column="kb_id"/>
+        <result property="kbName" column="kb_name"/>
+        <result property="originalName" column="original_name"/>
+        <result property="status" column="status"/>
+        <result property="chunkCount" column="chunk_count"/>
+        <result property="uploaderName" column="uploader_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="ReviewDocumentDetailResultMap" type="com.km.admin.review.vo.ReviewDocumentDetailVO">
+        <id property="docId" column="doc_id"/>
+        <result property="kbId" column="kb_id"/>
+        <result property="kbName" column="kb_name"/>
+        <result property="originalName" column="original_name"/>
+        <result property="status" column="status"/>
+        <result property="chunkCount" column="chunk_count"/>
+    </resultMap>
+
+    <select id="selectPendingReviewDocuments" resultMap="PendingReviewDocumentResultMap">
+        select d.id as doc_id,
+               d.kb_id,
+               kb.name as kb_name,
+               d.file_name as original_name,
+               d.document_status as status,
+               (select count(1) from km_document_chunk c where c.doc_id = d.id and c.is_active = 1) as chunk_count,
+               concat('user-', coalesce(d.user_id, 0)) as uploader_name,
+               d.created_at
+        from km_document d
+        left join km_knowledge_base kb on d.kb_id = kb.id
+        where d.document_status = 'PENDING_REVIEW'
+          and d.is_deleted = 0
+        <if test="kbId != null">
+          and d.kb_id = #{kbId}
+        </if>
+        order by d.created_at desc
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countPendingReviewDocuments" resultType="java.lang.Long">
+        select count(1)
+        from km_document d
+        where d.document_status = 'PENDING_REVIEW'
+          and d.is_deleted = 0
+        <if test="kbId != null">
+          and d.kb_id = #{kbId}
+        </if>
+    </select>
+
+    <select id="selectReviewDocumentDetail" resultMap="ReviewDocumentDetailResultMap">
+        select d.id as doc_id,
+               d.kb_id,
+               kb.name as kb_name,
+               d.file_name as original_name,
+               d.document_status as status,
+               (select count(1) from km_document_chunk c where c.doc_id = d.id and c.is_active = 1) as chunk_count
+        from km_document d
+        left join km_knowledge_base kb on d.kb_id = kb.id
+        where d.id = #{docId}
+          and d.is_deleted = 0
+    </select>
+
+    <select id="selectDocumentTags" resultType="java.lang.String">
+        select tag_name
+        from km_document_tag
+        where doc_id = #{docId}
+        order by id asc
+    </select>
+
+    <select id="selectDocumentStatus" resultType="java.lang.String">
+        select document_status
+        from km_document
+        where id = #{docId}
+          and is_deleted = 0
+    </select>
+
+    <update id="updateDocumentStatus">
+        update km_document
+        set document_status = #{status},
+            updated_at = now()
+        where id = #{docId}
+          and is_deleted = 0
+    </update>
+</mapper>
+

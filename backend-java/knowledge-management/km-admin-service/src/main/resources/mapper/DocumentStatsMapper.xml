@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.stats.mapper.DocumentStatsMapper">
+
+    <resultMap id="DocumentStatsResultMap" type="com.km.admin.stats.entity.DocumentStats">
+        <result property="totalCount" column="totalCount" jdbcType="BIGINT"/>
+        <result property="documentStatus" column="documentStatus" jdbcType="VARCHAR"/>
+        <result property="statusCount" column="statusCount" jdbcType="BIGINT"/>
+        <result property="uploadDate" column="uploadDate" jdbcType="DATE"/>
+        <result property="dailyUploadCount" column="dailyUploadCount" jdbcType="BIGINT"/>
+        <result property="failedCount" column="failedCount" jdbcType="BIGINT"/>
+    </resultMap>
+
+    <select id="getDocumentTotal" resultType="java.lang.Long">
+        SELECT 
+            COUNT(*) as totalCount
+        FROM km_document
+        WHERE is_deleted = 0
+    </select>
+
+    <select id="getDocumentStatusDistribution" resultMap="DocumentStatsResultMap">
+        SELECT 
+            document_status as documentStatus,
+            COUNT(*) as statusCount
+        FROM km_document
+        WHERE is_deleted = 0
+        GROUP BY document_status
+    </select>
+
+    <select id="getDocumentTrend" resultMap="DocumentStatsResultMap">
+        SELECT 
+            DATE(created_at) as uploadDate,
+            COUNT(*) as dailyUploadCount
+        FROM km_document
+        WHERE is_deleted = 0
+            AND created_at >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+        GROUP BY DATE(created_at)
+        ORDER BY uploadDate
+    </select>
+
+    <select id="getFailedDocumentCount" resultType="java.lang.Long">
+        SELECT 
+            COUNT(*) as failedCount
+        FROM km_document
+        WHERE is_deleted = 0
+            AND document_status = 'FAILED'
+    </select>
+
+    <select id="getReadyAndPendingReviewCounts" resultMap="DocumentStatsResultMap">
+        SELECT 
+            document_status as documentStatus,
+            COUNT(*) as statusCount
+        FROM km_document
+        WHERE is_deleted = 0
+            AND document_status IN ('READY', 'PENDING_REVIEW')
+        GROUP BY document_status
+    </select>
+
+</mapper>
