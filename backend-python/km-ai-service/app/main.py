@@ -10,7 +10,7 @@ from fastapi import  FastAPI
 from app.api.process import router as process_router
 from app.api.retrieval import router as retrieval_router
 
-app = FastAPI(title="KM AI Service", version="1.0.0")
+app = FastAPI(title="KM AI Service", version="1.1.0")
 
 
 @app.get("/health")

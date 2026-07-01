@@ -8,11 +8,12 @@ F4 整合（commit #26）：错误阶段映射单元测试。
 - 业务失败 → 200 + errorStage=CHUNK / STAGING / PARSE / OCR / INTERNAL
 """
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 # 必须在 import app 之前设置（INTERNAL_TOKEN 在模块加载时读取）
 os.environ.setdefault("INTERNAL_TOKEN", "test-token")
-os.environ.setdefault("ALLOWED_DOCUMENT_ROOT", "/tmp/f4-test-stages")
-
 import unittest
 
 from fastapi.testclient import TestClient
@@ -22,8 +23,15 @@ class TestStageErrors(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.tmp_dir = tempfile.TemporaryDirectory()
+        os.environ["ALLOWED_DOCUMENT_ROOT"] = cls.tmp_dir.name
         from app.main import app
         cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.close()
+        cls.tmp_dir.cleanup()
 
     def test_health_no_token_needed(self):
         # /health 公开（容器探活）
@@ -80,7 +88,7 @@ class TestStageErrors(unittest.TestCase):
             headers={"X-Internal-Token": "test-token"},
             json={
                 "taskId": 1, "docId": 1, "kbId": 1, "traceId": "t1",
-                "filePath": "/etc/passwd", "extension": "pdf",
+                "filePath": str(Path(self.tmp_dir.name).parent / "outside.pdf"), "extension": "pdf",
                 "targetVersionNo": 1, "taskPayloadJson": "{}",
             },
         )
@@ -88,6 +96,23 @@ class TestStageErrors(unittest.TestCase):
         body = resp.json()
         self.assertEqual(body.get("success"), False)
         self.assertEqual(body.get("errorStage"), "STAGING")
+
+    def test_ocr_runtime_error_returns_ocr_stage(self):
+        with (
+            patch("app.api.process.resolve_safe_path", return_value=Path("source.png")),
+            patch("app.api.process.parse_document", side_effect=RuntimeError("OCR engine failed")),
+        ):
+            resp = self.client.post(
+                "/internal/ai/parse",
+                headers={"X-Internal-Token": "test-token"},
+                json={
+                    "taskId": 1, "docId": 1, "kbId": 1, "traceId": "t-ocr",
+                    "filePath": "source.png", "extension": "png",
+                    "taskPayloadJson": {"enableOcr": True},
+                },
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("errorStage"), "OCR")
 
 
 if __name__ == "__main__":

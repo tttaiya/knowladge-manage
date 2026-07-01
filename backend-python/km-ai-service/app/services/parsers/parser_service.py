@@ -5,7 +5,16 @@ from pathlib import Path
 
 from app.schemas import ParsedBlock, TaskPayload
 from app.services.ocr import ocr_image
-from .text_utils import clean_text, ensure_file_exists, guess_extension, read_text_file, update_chapter_path
+from app.services.path_guard import MAX_PDF_PAGES
+from .text_utils import (
+    clean_document_text,
+    clean_pdf_pages,
+    clean_text,
+    ensure_file_exists,
+    guess_extension,
+    read_text_file,
+    update_chapter_path,
+)
 
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 TEXT_EXTENSIONS = {"txt", "md"}
@@ -46,7 +55,7 @@ def parse_document(file_path: str, extension: str | None, payload: TaskPayload) 
 
     blocks = [b for b in blocks if b.content and b.content.strip()]
     if not blocks:
-        raise RuntimeError("解析结果为空，请检查文件是否为空、是否为扫描件，或 OCR 是否已安装。")
+        raise ValueError("解析结果为空，请检查文件内容或 OCR 配置。")
 
     parsed_text = "\n\n".join(block.content for block in blocks if block.content.strip())
     return parsed_text, blocks, ext
@@ -59,35 +68,50 @@ def parse_pdf(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
     except Exception as exc:
         raise RuntimeError("缺少 PyMuPDF，请执行：pip install PyMuPDF") from exc
 
-    doc = fitz.open(str(path))
-    blocks: list[ParsedBlock] = []
+    try:
+        doc = fitz.open(str(path))
+    except Exception as exc:
+        raise ValueError("PDF 文件损坏、加密或无法打开") from exc
 
-    for page_index, page in enumerate(doc, start=1):
-        text = clean_text(page.get_text("text") or "")
-        if text:
-            blocks.append(
-                ParsedBlock(
-                    content=text,
-                    pageNo=page_index,
-                    blockType="paragraph",
-                    chapterPath=None,
-                    charCount=len(text),
+    with doc:
+        page_limit = min(payload.max_pdf_pages, MAX_PDF_PAGES)
+        if doc.page_count > page_limit:
+            raise ValueError(f"PDF 页数超过限制：{doc.page_count} 页（最大 {page_limit} 页）")
+        if doc.page_count == 0:
+            raise ValueError("PDF 不包含可解析页面")
+
+        page_texts = clean_pdf_pages(
+            [page.get_text("text") or "" for page in doc]
+        )
+        blocks: list[ParsedBlock] = []
+        for page_index, text in enumerate(page_texts, start=1):
+            if text:
+                blocks.append(
+                    ParsedBlock(
+                        content=text,
+                        pageNo=page_index,
+                        blockType="paragraph",
+                        chapterPath=None,
+                        charCount=len(text),
+                    )
                 )
-            )
 
-    total_chars = sum(len(block.content) for block in blocks)
-    if total_chars >= payload.min_pdf_text_chars or not payload.enable_ocr:
-        return blocks
+        total_chars = sum(len(block.content) for block in blocks)
+        if total_chars >= payload.min_pdf_text_chars or not payload.enable_ocr:
+            return blocks
 
-    # 扫描 PDF：文本层很少，按页渲染图片后 OCR。
-    ocr_blocks: list[ParsedBlock] = []
-    with tempfile.TemporaryDirectory(prefix="km_pdf_ocr_") as tmp_dir:
-        for page_index, page in enumerate(doc, start=1):
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-            image_path = Path(tmp_dir) / f"page_{page_index}.png"
-            pix.save(str(image_path))
-            text, _ = ocr_image(image_path)
-            text = clean_text(text)
+        # 扫描 PDF：文本层很少，按页渲染图片后 OCR；临时目录自动清理。
+        ocr_page_texts: list[str] = []
+        with tempfile.TemporaryDirectory(prefix="km_pdf_ocr_") as tmp_dir:
+            for page_index, page in enumerate(doc, start=1):
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                image_path = Path(tmp_dir) / f"page_{page_index}.png"
+                pix.save(str(image_path))
+                text, _ = ocr_image(image_path)
+                ocr_page_texts.append(text or "")
+
+        ocr_blocks: list[ParsedBlock] = []
+        for page_index, text in enumerate(clean_pdf_pages(ocr_page_texts), start=1):
             if text:
                 ocr_blocks.append(
                     ParsedBlock(
@@ -99,7 +123,7 @@ def parse_pdf(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
                     )
                 )
 
-    return ocr_blocks
+        return ocr_blocks
 
 
 def parse_docx(path: Path) -> list[ParsedBlock]:
@@ -113,7 +137,7 @@ def parse_docx(path: Path) -> list[ParsedBlock]:
     heading_levels: list[str] = []
 
     for paragraph in doc.paragraphs:
-        text = clean_text(paragraph.text or "")
+        text = clean_document_text(paragraph.text or "")
         if not text:
             continue
 
@@ -167,7 +191,7 @@ def parse_docx(path: Path) -> list[ParsedBlock]:
 
 
 def parse_text(path: Path) -> list[ParsedBlock]:
-    text = clean_text(read_text_file(path))
+    text = clean_document_text(read_text_file(path))
     return [ParsedBlock(content=text, pageNo=1, blockType="paragraph", chapterPath=None, charCount=len(text))] if text else []
 
 
@@ -175,7 +199,7 @@ def parse_image(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
     if not payload.enable_ocr:
         raise RuntimeError("图片文件必须启用 OCR 才能解析。")
     text, _ = ocr_image(path)
-    text = clean_text(text)
+    text = clean_document_text(text)
     return [ParsedBlock(content=text, pageNo=1, blockType="ocr", chapterPath=None, charCount=len(text))] if text else []
 
 
@@ -192,7 +216,7 @@ def parse_pptx(path: Path) -> list[ParsedBlock]:
         for shape in slide.shapes:
             if hasattr(shape, "text") and shape.text:
                 texts.append(shape.text)
-        text = clean_text("\n".join(texts))
+        text = clean_document_text("\n".join(texts))
         if text:
             blocks.append(ParsedBlock(content=text, pageNo=index, blockType="paragraph", charCount=len(text)))
     return blocks

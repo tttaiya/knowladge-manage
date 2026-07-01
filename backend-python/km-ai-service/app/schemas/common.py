@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -21,6 +22,10 @@ class TaskPayload(CamelModel):
     separator: Any = "\n\n"
     enable_ocr: bool = Field(True, alias="enableOcr")
     min_pdf_text_chars: int = Field(30, alias="minPdfTextChars")
+    max_pdf_pages: int = Field(
+        default_factory=lambda: int(os.environ.get("MAX_PDF_PAGES", "200")),
+        alias="maxPdfPages",
+    )
 
     @field_validator("chunk_mode")
     @classmethod
@@ -33,8 +38,8 @@ class TaskPayload(CamelModel):
     @field_validator("chunk_size")
     @classmethod
     def validate_chunk_size(cls, value: int) -> int:
-        if value < 100:
-            return 100
+        if value < 50:
+            return 50
         if value > 5000:
             return 5000
         return value
@@ -47,6 +52,13 @@ class TaskPayload(CamelModel):
         if value > 1000:
             return 1000
         return value
+
+    @field_validator("max_pdf_pages")
+    @classmethod
+    def validate_max_pdf_pages(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("maxPdfPages 必须大于 0")
+        return min(value, 2000)
 
     def separators(self) -> List[str]:
         """把 separator 统一转成分隔符列表。"""
@@ -77,9 +89,24 @@ def parse_task_payload(value: Any) -> TaskPayload:
         return value
     if isinstance(value, str):
         try:
-            return TaskPayload.model_validate(json.loads(value))
+            return parse_task_payload(json.loads(value))
         except json.JSONDecodeError:
             raise ValueError("taskPayloadJson 不是合法 JSON 字符串")
     if isinstance(value, dict):
-        return TaskPayload.model_validate(value)
+        data = dict(value)
+        snapshot = data.get("knowledgeBaseSnapshot")
+        source = dict(snapshot) if isinstance(snapshot, dict) else {}
+        source.update(data)
+
+        # 兼容 F2 已落地的知识库快照字段，同时保留 F4 顶层字段优先级。
+        if "chunkMode" not in data and source.get("chunkStrategy") is not None:
+            data["chunkMode"] = source["chunkStrategy"]
+        if "overlap" not in data and source.get("chunkOverlap") is not None:
+            data["overlap"] = source["chunkOverlap"]
+        if "separator" not in data and source.get("separators") is not None:
+            data["separator"] = source["separators"]
+        if "chunkSize" not in data and source.get("chunkSize") is not None:
+            data["chunkSize"] = source["chunkSize"]
+
+        return TaskPayload.model_validate(data)
     raise ValueError("taskPayloadJson 只支持对象或 JSON 字符串")
