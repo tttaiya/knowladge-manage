@@ -129,21 +129,42 @@ services:
 
   fastapi-ai-service:
     build:
-      context: ../..                       # F4 整合（commit #21）：项目根作 build context
+      context: ../..                       # 项目根目录作为 build context
       dockerfile: backend-python/km-ai-service/Dockerfile
     container_name: km-ai-service
     environment:
-      # F4 commit #22：内部接口 X-Internal-Token 校验
+      # 内部接口认证
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-demo-internal-token}
-      # F4 commit #22：受限文件根目录（与 docker-compose task-files 卷对应）
+
+      # 受限文件根目录
       ALLOWED_DOCUMENT_ROOT: /data/task-files
+
+      # F5：FastAPI 容器通过 Docker 服务名访问 ChromaDB
+      CHROMA_HOST: ${CHROMA_HOST:-chromadb}
+      CHROMA_PORT: ${CHROMA_PORT:-8000}
+      CHROMA_COLLECTION: ${CHROMA_COLLECTION:-km_document_chunks}
+
+      # F5：阿里云百炼 Embedding
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v4}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
+
+      # F5：阿里云百炼 Rerank
+      RERANK_API_BASE: ${RERANK_API_BASE:-https://dashscope.aliyuncs.com/compatible-api/v1}
+      RERANK_MODEL: ${RERANK_MODEL:-qwen3-rerank}
+
     volumes:
-      # F4 commit #25：task-files 命名卷，FastAPI 只读
       - task-files:/data/task-files:ro
-    # F4 commit #25 安全：FastAPI 仅在 docker 内部网络可达，不向宿主暴露
-    # 调试可临时改 ports: ["8004:8000"]；正式环境必须用 expose
+
+    depends_on:
+      chromadb:
+        condition: service_healthy
+
+    # FastAPI 仅在 Docker 内部网络可访问
     expose:
       - "8000"
+
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
