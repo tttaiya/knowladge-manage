@@ -71,8 +71,8 @@ public class ConfigStartupInitializer implements ApplicationRunner {
         log.info("ConfigStartupInitializer starting...");
         loadParserConfigWithRetry();
         startAllListeners();
-        log.info("ConfigStartupInitializer done. DynamicConfigHolder.maxConcurrentTasks={}, initialized={}",
-                holder.maxConcurrentTasks(), holder.isInitialized());
+        log.info("ConfigStartupInitializer done. DynamicConfigHolder.maxConcurrentTasks={}, chunkSize={}, chunkOverlap={}, initialized={}",
+                holder.maxConcurrentTasks(), holder.chunkSize(), holder.chunkOverlap(), holder.isInitialized());
     }
 
     private void loadParserConfigWithRetry() {
@@ -95,10 +95,12 @@ public class ConfigStartupInitializer implements ApplicationRunner {
                 }
 
                 holder.setMaxConcurrentTasks(config.getMaxConcurrentTasks());
+                holder.setChunkConfig(config.getChunkSize(), config.getChunkOverlap());
                 holder.markInitialized();
 
-                log.info("ConfigStartupInitializer loaded parser config: maxConcurrentTasks={}, maxRetryCount={}, timeoutSeconds={}",
-                        config.getMaxConcurrentTasks(), config.getMaxRetryCount(), config.getTimeoutSeconds());
+                log.info("ConfigStartupInitializer loaded parser config: maxConcurrentTasks={}, chunkSize={}, chunkOverlap={}, maxRetryCount={}, timeoutSeconds={}",
+                        config.getMaxConcurrentTasks(), config.getChunkSize(), config.getChunkOverlap(),
+                        config.getMaxRetryCount(), config.getTimeoutSeconds());
                 return;
             } catch (Exception e) {
                 log.error("Failed to load parser config (attempt {}/{}): {}", i, maxRetries, e.getMessage());

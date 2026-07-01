@@ -24,6 +24,13 @@
          WHERE config_key = #{configKey}
     </update>
 
+    <insert id="insertConfigChangeLog">
+        INSERT INTO km_config_change_log
+            (operator_id, operator_name, config_group, config_version, change_summary, created_at)
+        VALUES
+            (#{operatorId}, #{operatorName}, #{configGroup}, #{configVersion}, #{changeSummary}, NOW())
+    </insert>
+
     <!-- 加载 embedding 配置（4 字段） -->
     <select id="loadEmbeddingConfig" resultType="com.km.admin.config.dto.EmbeddingConfigDTO">
         SELECT
@@ -50,11 +57,14 @@
     <!-- 加载 parser 配置（4 字段） -->
     <select id="loadParserConfig" resultType="com.km.admin.config.dto.ParserConfigDTO">
         SELECT
+            MAX(CASE WHEN config_key = 'parser.api_base'             THEN config_value END) AS apiBase,
             MAX(CASE WHEN config_key = 'parser.paddleocr_enabled'    THEN config_value END) AS paddleocrEnabled,
+            MAX(CASE WHEN config_key = 'parser.chunk_size'            THEN config_value END) AS chunkSize,
+            MAX(CASE WHEN config_key = 'parser.chunk_overlap'         THEN config_value END) AS chunkOverlap,
             MAX(CASE WHEN config_key = 'parser.max_concurrent_tasks' THEN config_value END) AS maxConcurrentTasks,
             MAX(CASE WHEN config_key = 'parser.max_retry_count'      THEN config_value END) AS maxRetryCount,
             MAX(CASE WHEN config_key = 'parser.timeout_seconds'      THEN config_value END) AS timeoutSeconds
           FROM km_system_config
-         WHERE config_key IN ('parser.paddleocr_enabled','parser.max_concurrent_tasks','parser.max_retry_count','parser.timeout_seconds')
+         WHERE config_key IN ('parser.api_base','parser.paddleocr_enabled','parser.chunk_size','parser.chunk_overlap','parser.max_concurrent_tasks','parser.max_retry_count','parser.timeout_seconds')
     </select>
 </mapper>

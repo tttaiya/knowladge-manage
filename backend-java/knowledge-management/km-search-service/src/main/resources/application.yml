@@ -9,6 +9,12 @@ spring:
     username: ${MYSQL_USER:km}
     password: ${MYSQL_PASSWORD:km123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    virtual-host: ${RABBITMQ_VHOST:/km}
+    username: ${RABBITMQ_USER:km}
+    password: ${RABBITMQ_PASSWORD:km123456}
 
 mybatis:
   configuration:
