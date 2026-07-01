@@ -4,6 +4,5 @@ import com.km.admin.review.dto.UpdateChunkRequest;
 
 public interface ChunkEditService {
 
-    int updateChunk(Long chunkId, UpdateChunkRequest request);
+    int updateChunk(Long chunkId, UpdateChunkRequest request, String operatorUserId, String operatorName);
 }
-

@@ -2,7 +2,7 @@ FROM maven:3.8.6-eclipse-temurin-8 AS build
 WORKDIR /workspace
 COPY backend-java backend-java
 WORKDIR /workspace/backend-java
-RUN mvn -pl knowledge-management/km-admin-service -am package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 mvn -pl knowledge-management/km-admin-service -am package -DskipTests -Dmaven.wagon.http.retryHandler.count=5
 
 FROM eclipse-temurin:8-jre
 WORKDIR /app

@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { AxiosHeaders } from 'axios'
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 /**
  * 知识管理前端统一 Axios 封装。
@@ -16,11 +17,18 @@ const request: AxiosInstance = axios.create({
   timeout: 30000,
 })
 
-request.interceptors.request.use((config: AxiosRequestConfig) => {
+request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (typeof window !== 'undefined') {
     const token = window.localStorage.getItem('access_token')
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
+    if (token) {
+      if (!config.headers) {
+        config.headers = new AxiosHeaders()
+      }
+      if (typeof config.headers.set === 'function') {
+        config.headers.set('Authorization', `Bearer ${token}`)
+      } else {
+        config.headers.Authorization = `Bearer ${token}`
+      }
     }
   }
   return config
@@ -53,6 +61,9 @@ export const post = <T = unknown>(url: string, data?: unknown, config?: AxiosReq
 
 export const put = <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<Envelope<T>> =>
   request.put<Envelope<T>>(url, data, config).then((r) => r as unknown as Envelope<T>)
+
+export const patch = <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<Envelope<T>> =>
+  request.patch<Envelope<T>>(url, data, config).then((r) => r as unknown as Envelope<T>)
 
 export const del = <T = unknown>(url: string, config?: AxiosRequestConfig): Promise<Envelope<T>> =>
   request.delete<Envelope<T>>(url, config).then((r) => r as unknown as Envelope<T>)

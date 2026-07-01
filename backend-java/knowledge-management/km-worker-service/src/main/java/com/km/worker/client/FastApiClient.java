@@ -2,7 +2,6 @@ package com.km.worker.client;
 
 import com.km.worker.exception.AiStageException;
 import com.km.worker.messaging.KmTaskMessage;
-import com.km.worker.DynamicConfigHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,18 +37,15 @@ public class FastApiClient {
     private final RestTemplate restTemplate;
     private final String aiBaseUrl;
     private final String internalToken;
-    private final DynamicConfigHolder configHolder;
 
     public FastApiClient(
             RestTemplateBuilder builder,
             @Value("${km.ai-base-url}") String aiBaseUrl,
             @Value("${km.ai.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${km.ai.read-timeout-ms:30000}") int readTimeoutMs,
-            @Value("${km.internal.token:demo-internal-token}") String internalToken,
-            DynamicConfigHolder configHolder) {
+            @Value("${km.internal.token:demo-internal-token}") String internalToken) {
         this.aiBaseUrl = aiBaseUrl;
         this.internalToken = internalToken;
-        this.configHolder = configHolder;
         this.restTemplate = builder
                 .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .setReadTimeout(Duration.ofMillis(readTimeoutMs))
@@ -70,7 +66,7 @@ public class FastApiClient {
         body.put("filePath", stagedFilePath);          // F4 接收容器内路径
         body.put("extension", msg.extension);          // F4 校验
         body.put("targetVersionNo", msg.targetVersionNo == null ? 1L : msg.targetVersionNo);
-        body.put("taskPayloadJson", configHolder.applyParserDefaults(msg.taskPayloadJson));
+        body.put("taskPayloadJson", msg.taskPayloadJson == null ? "{}" : msg.taskPayloadJson);
         return assertSuccess(post("/internal/ai/parse", body), "PARSE", msg.traceId);
     }
 
@@ -87,7 +83,7 @@ public class FastApiClient {
         body.put("traceId", msg.traceId);
         body.put("blocks", parseResponse.get("blocks"));           // parseResponse.blocks 原样传入
         body.put("parsedText", parseResponse.get("parsedText"));   // 兼容
-        body.put("taskPayloadJson", configHolder.applyParserDefaults(msg.taskPayloadJson));
+        body.put("taskPayloadJson", msg.taskPayloadJson == null ? "{}" : msg.taskPayloadJson);
         return assertSuccess(post("/internal/ai/chunk", body), "CHUNK", msg.traceId);
     }
 

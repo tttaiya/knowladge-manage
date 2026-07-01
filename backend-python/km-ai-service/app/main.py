@@ -31,6 +31,7 @@ def embed(payload: dict):
     target_version = task.get("targetVersionNo") or 1
     vector_id = f"vec-{doc_id}-{target_version}-1"
     return {
+        "success": True,
         "docId": doc_id,
         "vectorIds": [vector_id],
         "chunks": [{

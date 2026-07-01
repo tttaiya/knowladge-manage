@@ -29,9 +29,8 @@
         order by created_at asc
     </select>
 
-    <insert id="insert" parameterType="com.km.admin.review.entity.ChunkEditLog">
+    <insert id="insert" parameterType="com.km.admin.review.entity.ChunkEditLog" useGeneratedKeys="true" keyProperty="id">
         insert into km_chunk_edit_log (chunk_id, before_content, after_content, action, operator_user_id, operator_name, created_at)
-        values (#{chunkId}, #{beforeContent}, #{afterContent}, #{action}, coalesce(#{operatorUserId}, 0), #{operatorName}, #{createdAt})
+        values (#{chunkId}, #{beforeContent}, #{afterContent}, #{action}, #{operatorUserId}, #{operatorName}, #{createdAt})
     </insert>
 </mapper>
-

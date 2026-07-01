@@ -49,6 +49,11 @@
             <artifactId>minio</artifactId>
             <version>8.5.7</version>
         </dependency>
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.11.0</version>
+        </dependency>
         <!-- F6（commit #15）：钱小晓配置模块去 Lombok，所有 @Data 改显式 getter/setter -->
         <!-- 原 lombok 1.18.32 + JDK 17 + Spring Boot 2.6.4 在本项目编译失败（review/document 模块先例），移除 -->
         <!-- F6（commit #16）：事务一致性 Spring 集成测试 -->
@@ -64,6 +69,17 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.km.admin.AdminApplication</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

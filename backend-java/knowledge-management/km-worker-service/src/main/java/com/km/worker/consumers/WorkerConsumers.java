@@ -37,22 +37,22 @@ public class WorkerConsumers {
         this.processingService = processingService;
     }
 
-    @RabbitListener(id = "processListener", queues = "km.doc.process", autoStartup = "false")
+    @RabbitListener(id = "processListener", queues = "km.doc.process", autoStartup = "false", containerFactory = "taskListenerContainerFactory")
     public void process(byte[] body, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws Exception {
         processingService.handle(read(body), channel, tag);
     }
 
-    @RabbitListener(id = "reprocessListener", queues = "km.doc.reprocess", autoStartup = "false")
+    @RabbitListener(id = "reprocessListener", queues = "km.doc.reprocess", autoStartup = "false", containerFactory = "taskListenerContainerFactory")
     public void reprocess(byte[] body, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws Exception {
         processingService.handle(read(body), channel, tag);
     }
 
-    @RabbitListener(id = "reembedListener", queues = "km.chunk.reembed", autoStartup = "false")
+    @RabbitListener(id = "reembedListener", queues = "km.chunk.reembed", autoStartup = "false", containerFactory = "taskListenerContainerFactory")
     public void reembed(byte[] body, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws Exception {
         processingService.handle(read(body), channel, tag);
     }
 
-    @RabbitListener(id = "purgeListener", queues = "km.doc.purge", autoStartup = "false")
+    @RabbitListener(id = "purgeListener", queues = "km.doc.purge", autoStartup = "false", containerFactory = "taskListenerContainerFactory")
     public void purge(byte[] body, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws Exception {
         processingService.handle(read(body), channel, tag);
     }
