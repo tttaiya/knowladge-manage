@@ -33,10 +33,21 @@ public interface RetrievalMapper {
             "</if>",
             "</script>"
     })
-    List<Long> selectReadyDocIds(@Param("knowledgeBaseIds") List<Long> knowledgeBaseIds,
-                                 @Param("tags") List<String> tags,
-                                 @Param("tagCount") int tagCount);
+    List<Long> selectReadyDocIds(
+            @Param("knowledgeBaseIds")
+            List<Long> knowledgeBaseIds,
 
+            @Param("tags")
+            List<String> tags,
+
+            @Param("tagCount")
+            int tagCount
+    );
+
+    /**
+     * 保留旧的按 chunkId 批量查询方法，
+     * 避免影响当前项目中的其他调用方。
+     */
     @Select({
             "<script>",
             "SELECT",
@@ -64,7 +75,48 @@ public interface RetrievalMapper {
             "  AND kb.is_deleted = 0",
             "</script>"
     })
-    List<ChunkDetailRecord> selectChunkDetailsByIds(@Param("chunkIds") List<Long> chunkIds);
+    List<ChunkDetailRecord> selectChunkDetailsByIds(
+            @Param("chunkIds")
+            List<Long> chunkIds
+    );
+
+    /**
+     * 根据 FastAPI 返回的 vectorId 批量回查真实切片。
+     *
+     * ChromaDB 只保存 vectorId 和向量；
+     * chunkId、正文、页码、标题路径等业务数据以 MySQL 为准。
+     */
+    @Select({
+            "<script>",
+            "SELECT",
+            "  c.id AS chunkId,",
+            "  c.doc_id AS docId,",
+            "  d.kb_id AS kbId,",
+            "  d.file_name AS docName,",
+            "  kb.name AS kbName,",
+            "  c.chapter_path AS chapterPath,",
+            "  c.page_no AS pageNo,",
+            "  c.chunk_type AS chunkType,",
+            "  c.content AS content,",
+            "  c.vector_id AS vectorId",
+            "FROM km_document_chunk c",
+            "JOIN km_document d ON d.id = c.doc_id",
+            "JOIN km_knowledge_base kb ON kb.id = d.kb_id",
+            "WHERE c.vector_id IN",
+            "<foreach collection='vectorIds' item='vectorId' open='(' separator=',' close=')'>",
+            "  #{vectorId}",
+            "</foreach>",
+            "  AND c.is_active = 1",
+            "  AND c.vector_status = 'READY'",
+            "  AND d.document_status = 'READY'",
+            "  AND d.is_deleted = 0",
+            "  AND kb.is_deleted = 0",
+            "</script>"
+    })
+    List<ChunkDetailRecord> selectChunkDetailsByVectorIds(
+            @Param("vectorIds")
+            List<String> vectorIds
+    );
 
     @Select({
             "<script>",
@@ -79,7 +131,10 @@ public interface RetrievalMapper {
             "ORDER BY dt.doc_id ASC, dt.tag_name ASC",
             "</script>"
     })
-    List<DocTagRow> selectTagsByDocIds(@Param("docIds") List<Long> docIds);
+    List<DocTagRow> selectTagsByDocIds(
+            @Param("docIds")
+            List<Long> docIds
+    );
 
     @Select({
             "SELECT",
@@ -103,6 +158,8 @@ public interface RetrievalMapper {
             "  AND d.is_deleted = 0",
             "  AND kb.is_deleted = 0"
     })
-    ChunkDetailRecord selectChunkDetail(@Param("chunkId") Long chunkId);
+    ChunkDetailRecord selectChunkDetail(
+            @Param("chunkId")
+            Long chunkId
+    );
 }
-

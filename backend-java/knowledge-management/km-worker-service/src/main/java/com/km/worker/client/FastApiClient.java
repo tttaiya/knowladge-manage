@@ -1,5 +1,7 @@
 package com.km.worker.client;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.km.worker.exception.AiStageException;
 import com.km.worker.messaging.KmTaskMessage;
 import com.km.worker.DynamicConfigHolder;
@@ -17,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,17 +39,20 @@ public class FastApiClient {
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     private final String aiBaseUrl;
     private final String internalToken;
     private final DynamicConfigHolder configHolder;
 
     public FastApiClient(
             RestTemplateBuilder builder,
+            ObjectMapper objectMapper,
             @Value("${km.ai-base-url}") String aiBaseUrl,
             @Value("${km.ai.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${km.ai.read-timeout-ms:30000}") int readTimeoutMs,
             @Value("${km.internal.token:demo-internal-token}") String internalToken,
             DynamicConfigHolder configHolder) {
+        this.objectMapper = objectMapper;
         this.aiBaseUrl = aiBaseUrl;
         this.internalToken = internalToken;
         this.configHolder = configHolder;
@@ -96,6 +102,7 @@ public class FastApiClient {
      */
     public Map<String, Object> embed(KmTaskMessage msg, Object chunks) {
         Map<String, Object> body = new LinkedHashMap<>();
+        body.put("operation", "EMBED");
         body.put("task", msg);
         body.put("chunks", chunks);
         return assertSuccess(post("/internal/ai/embed", body), "EMBED", msg.traceId);
@@ -106,13 +113,53 @@ public class FastApiClient {
      */
     public Map<String, Object> reembed(KmTaskMessage msg) {
         Map<String, Object> body = new LinkedHashMap<>();
+        body.put("operation", "REEMBED");
         body.put("task", msg);
+        body.put("chunks", readReembedChunks(msg));
         return assertSuccess(post("/internal/ai/embed", body), "EMBED", msg.traceId);
     }
 
     /**
      * 删除向量（document 或 version 级）；失败返回 false，PURGE 链路将其标记为 CHROMA 阶段失败
      */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> readReembedChunks(KmTaskMessage msg) {
+        if (msg == null || msg.taskPayloadJson == null
+                || msg.taskPayloadJson.trim().isEmpty()) {
+            throw new AiStageException(
+                    "EMBED", "REEMBED taskPayloadJson is empty",
+                    msg == null ? null : msg.traceId);
+        }
+
+        try {
+            Map<String, Object> payload = objectMapper.readValue(
+                    msg.taskPayloadJson,
+                    new TypeReference<Map<String, Object>>() { });
+            Object chunksValue = payload.get("chunks");
+            if (!(chunksValue instanceof List) || ((List<?>) chunksValue).isEmpty()) {
+                throw new AiStageException(
+                        "EMBED",
+                        "REEMBED taskPayloadJson.chunks must be a non-empty array",
+                        msg.traceId);
+            }
+            for (Object chunk : (List<?>) chunksValue) {
+                if (!(chunk instanceof Map)) {
+                    throw new AiStageException(
+                            "EMBED", "REEMBED chunks item must be an object",
+                            msg.traceId);
+                }
+            }
+            return (List<Map<String, Object>>) chunksValue;
+        } catch (AiStageException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AiStageException(
+                    "EMBED",
+                    "Failed to parse REEMBED taskPayloadJson: " + e.getMessage(),
+                    msg.traceId);
+        }
+    }
+
     public boolean deleteVectors(Long docId) {
         try {
             HttpHeaders h = new HttpHeaders();

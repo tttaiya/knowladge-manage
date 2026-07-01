@@ -20,16 +20,22 @@ services:
       - ../../sql/document-version.sql:/docker-entrypoint-initdb.d/06_document_version.sql:ro
       - ../../sql/purge-audit.sql:/docker-entrypoint-initdb.d/09_purge_audit.sql:ro
       - ../../sql/review.sql:/docker-entrypoint-initdb.d/07_review.sql:ro
-      # R17/V4: V3 文档字段加法迁移（mime_type / file_size / file_hash / uploader_name / chunk_count / retry_count / tag 唯一索引）
+
+      # R17/V4：文档模块加法迁移
       - ../../sql/V3__document_module_integration.sql:/docker-entrypoint-initdb.d/10_V3__document_module_integration.sql:ro
-      # R14/V4: 统一用户 ID 为 VARCHAR(36) UUID
+
+      # R14/V4：用户 ID 统一为 UUID
       - ../../sql/V4__global_user_id_uuid.sql:/docker-entrypoint-initdb.d/11_V4__global_user_id_uuid.sql:ro
-      # F6（commit #14/18）：km_system_config 表 + 13 条 seed 数据
-      # R12：加法迁移，不破坏现有表
+
+      # F6：系统配置
       - ../../sql/km-system-config.sql:/docker-entrypoint-initdb.d/12_km_system_config.sql:ro
-      # F2（commit #27）：知识库管理加法迁移（description/category/chunk_strategy/...+active_name 生成列+uk_kb_active_name）
-      # 挂在 init-demo 之前（13 < 99），确保 demo seed 在新列已就位后执行
+
+      # F2：知识库管理加法迁移
       - ../../sql/V5__knowledge_base_management.sql:/docker-entrypoint-initdb.d/13_V5__knowledge_base_management.sql:ro
+
+      # F5：REEMBED 内容版本
+      - ../../sql/V6__f5_reembed_content_version.sql:/docker-entrypoint-initdb.d/14_V6__f5_reembed_content_version.sql:ro
+
       - ../../sql/init-demo.sql:/docker-entrypoint-initdb.d/99_init_demo.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ukm", "-pkm123456"]
@@ -129,21 +135,42 @@ services:
 
   fastapi-ai-service:
     build:
-      context: ../..                       # F4 整合（commit #21）：项目根作 build context
+      context: ../..                       # 项目根目录作为 build context
       dockerfile: backend-python/km-ai-service/Dockerfile
     container_name: km-ai-service
     environment:
-      # F4 commit #22：内部接口 X-Internal-Token 校验
+      # 内部接口认证
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-demo-internal-token}
-      # F4 commit #22：受限文件根目录（与 docker-compose task-files 卷对应）
+
+      # 受限文件根目录
       ALLOWED_DOCUMENT_ROOT: /data/task-files
+
+      # F5：FastAPI 容器通过 Docker 服务名访问 ChromaDB
+      CHROMA_HOST: ${CHROMA_HOST:-chromadb}
+      CHROMA_PORT: ${CHROMA_PORT:-8000}
+      CHROMA_COLLECTION: ${CHROMA_COLLECTION:-km_document_chunks}
+
+      # F5：阿里云百炼 Embedding
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v4}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
+
+      # F5：阿里云百炼 Rerank
+      RERANK_API_BASE: ${RERANK_API_BASE:-https://dashscope.aliyuncs.com/compatible-api/v1}
+      RERANK_MODEL: ${RERANK_MODEL:-qwen3-rerank}
+
     volumes:
-      # F4 commit #25：task-files 命名卷，FastAPI 只读
       - task-files:/data/task-files:ro
-    # F4 commit #25 安全：FastAPI 仅在 docker 内部网络可达，不向宿主暴露
-    # 调试可临时改 ports: ["8004:8000"]；正式环境必须用 expose
+
+    depends_on:
+      chromadb:
+        condition: service_healthy
+
+    # FastAPI 仅在 Docker 内部网络可访问
     expose:
       - "8000"
+
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
