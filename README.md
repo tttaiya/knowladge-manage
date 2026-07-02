@@ -158,7 +158,8 @@ MySQL  ·  Redis  ·  RabbitMQ  ·  Nacos  ·  MinIO  ·  ChromaDB
 
 | 路径前缀 | 下游服务 |
 |---|---|
-| `/api/v1/knowledge-bases/**` | `km-admin-service` |
+| `/api/v1/admin/knowledge-bases/**` | `km-admin-service` |
+| `/api/v1/knowledge-bases/**` | `km-admin-service`（文档模块嵌套路由） |
 | `/api/v1/documents/**` | `km-admin-service` |
 | `/api/v1/reviews/**` | `km-admin-service` |
 | `/api/v1/configs/**` | `km-admin-service` |

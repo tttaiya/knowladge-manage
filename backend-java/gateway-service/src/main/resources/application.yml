@@ -15,7 +15,8 @@ spring:
         - id: km-admin
           uri: ${KM_ADMIN_URI:http://km-admin-service:9101}
           predicates:
-            - Path=/api/v1/knowledge-bases/**,
+            - Path=/api/v1/admin/knowledge-bases/**,
+                  /api/v1/knowledge-bases/**,
                   /api/v1/documents/**,
                   /api/v1/reviews/**,
                   /api/v1/configs/**,
