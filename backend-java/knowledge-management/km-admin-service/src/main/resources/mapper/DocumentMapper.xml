@@ -29,13 +29,19 @@
                d.kb_id,
                kb.name as kb_name,
                d.file_name as original_name,
-               d.document_status as status,
-               (select count(1) from km_document_chunk c where c.doc_id = d.id and c.is_active = 1) as chunk_count,
+               case when pv.version_no is not null then 'PENDING_REVIEW' else d.document_status end as status,
+               (select count(1)
+                  from km_document_chunk c
+                 where c.doc_id = d.id
+                   and (c.is_active = 1 or c.version_no = pv.version_no)) as chunk_count,
                concat('user-', coalesce(d.user_id, 0)) as uploader_name,
                d.created_at
         from km_document d
         left join km_knowledge_base kb on d.kb_id = kb.id
-        where d.document_status = 'PENDING_REVIEW'
+        left join km_document_version pv
+          on pv.doc_id = d.id
+         and pv.version_status = 'PENDING_REVIEW'
+        where (d.document_status = 'PENDING_REVIEW' or pv.version_no is not null)
           and d.is_deleted = 0
         <if test="kbId != null">
           and d.kb_id = #{kbId}
@@ -47,7 +53,10 @@
     <select id="countPendingReviewDocuments" resultType="java.lang.Long">
         select count(1)
         from km_document d
-        where d.document_status = 'PENDING_REVIEW'
+        left join km_document_version pv
+          on pv.doc_id = d.id
+         and pv.version_status = 'PENDING_REVIEW'
+        where (d.document_status = 'PENDING_REVIEW' or pv.version_no is not null)
           and d.is_deleted = 0
         <if test="kbId != null">
           and d.kb_id = #{kbId}
@@ -59,10 +68,16 @@
                d.kb_id,
                kb.name as kb_name,
                d.file_name as original_name,
-               d.document_status as status,
-               (select count(1) from km_document_chunk c where c.doc_id = d.id and c.is_active = 1) as chunk_count
+               case when pv.version_no is not null then 'PENDING_REVIEW' else d.document_status end as status,
+               (select count(1)
+                  from km_document_chunk c
+                 where c.doc_id = d.id
+                   and (c.is_active = 1 or c.version_no = pv.version_no)) as chunk_count
         from km_document d
         left join km_knowledge_base kb on d.kb_id = kb.id
+        left join km_document_version pv
+          on pv.doc_id = d.id
+         and pv.version_status = 'PENDING_REVIEW'
         where d.id = #{docId}
           and d.is_deleted = 0
     </select>

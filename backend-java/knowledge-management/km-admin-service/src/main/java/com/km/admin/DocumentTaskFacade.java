@@ -3,6 +3,7 @@ package com.km.admin;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * 文档模块对任务层的公开门面。R16：与 TaskCommandService 同包，跨子包可注入。
@@ -41,5 +42,12 @@ public class DocumentTaskFacade {
 
     public Long createStrategyReprocessTask(Long docId, Long strategyVersion, String operatorUserId) {
         return taskCommandService.createStrategyReprocessTask(docId, strategyVersion, operatorUserId);
+    }
+
+    public Long createKnowledgeBaseReprocessTask(Long docId, Long strategyVersion, String operatorUserId,
+                                                 String triggerSource, String idempotencyKey,
+                                                 Map<String, Object> payload) {
+        return taskCommandService.createKnowledgeBaseReprocessTask(
+                docId, strategyVersion, operatorUserId, triggerSource, idempotencyKey, payload);
     }
 }

@@ -58,7 +58,7 @@ public class RetrievalServiceImpl implements RetrievalService {
                 normalized.tags.size()
         );
         if (readyDocIds == null || readyDocIds.isEmpty()) {
-            return emptyResponse(begin);
+            return emptyResponse(begin, normalized, null);
         }
 
         AiRetrievalRequest aiRequest = buildAiRequest(normalized, readyDocIds);
@@ -67,7 +67,7 @@ public class RetrievalServiceImpl implements RetrievalService {
         List<AiRetrievalCandidate> candidates =
                 normalizeCandidates(aiResponse, normalized, actualMode);
         if (candidates.isEmpty()) {
-            return emptyResponse(begin);
+            return emptyResponse(begin, normalized, aiResponse);
         }
 
         List<String> vectorIds = candidates.stream()
@@ -76,7 +76,7 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .distinct()
                 .collect(Collectors.toList());
         if (vectorIds.isEmpty()) {
-            return emptyResponse(begin);
+            return emptyResponse(begin, normalized, aiResponse);
         }
 
         List<ChunkDetailRecord> chunkDetails =
@@ -91,7 +91,7 @@ public class RetrievalServiceImpl implements RetrievalService {
             }
         }
         if (chunkMap.isEmpty()) {
-            return emptyResponse(begin);
+            return emptyResponse(begin, normalized, aiResponse);
         }
 
         Map<Long, List<String>> tagMap = loadTags(chunkMap.values().stream()
@@ -114,6 +114,7 @@ public class RetrievalServiceImpl implements RetrievalService {
         response.setRecords(records);
         response.setTotal(records.size());
         response.setElapsedMs(System.currentTimeMillis() - begin);
+        fillPolicyFields(response, normalized, aiResponse);
         return response;
     }
 
@@ -151,9 +152,9 @@ public class RetrievalServiceImpl implements RetrievalService {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "query 不能为空");
         }
 
-        RetrievalMode mode = RetrievalMode.from(StringUtils.hasText(request.getMode())
-                ? request.getMode()
-                : defaults.getDefaultMode());
+        RetrievalMode requestMode = StringUtils.hasText(request.getMode())
+                ? RetrievalMode.from(request.getMode())
+                : null;
         int topK = request.getTopK() == null ? defaults.getDefaultTopK() : request.getTopK();
         if (topK <= 0 || topK > defaults.getMaxTopK()) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "topK 范围为 1～" + defaults.getMaxTopK());
@@ -182,12 +183,53 @@ public class RetrievalServiceImpl implements RetrievalService {
         normalized.query = query;
         normalized.knowledgeBaseIds = normalizeLongList(request.getKnowledgeBaseIds());
         normalized.tags = normalizeStringList(request.getTags());
-        normalized.mode = mode;
+        EffectivePolicy policy = resolveEffectivePolicy(normalized.knowledgeBaseIds, requestMode);
+        normalized.mode = policy.mode;
+        normalized.modeSource = policy.source;
         normalized.topK = topK;
         normalized.similarityThreshold = similarityThreshold;
         normalized.rerankTopN = rerankTopN;
         normalized.rerankThreshold = rerankThreshold;
         return normalized;
+    }
+
+    private EffectivePolicy resolveEffectivePolicy(List<Long> knowledgeBaseIds, RetrievalMode requestMode) {
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
+            return new EffectivePolicy(
+                    requestMode == null ? RetrievalMode.from(defaults.getDefaultMode()) : requestMode,
+                    requestMode == null ? "DEFAULT" : "REQUEST");
+        }
+
+        List<Map<String, Object>> rows = retrievalMapper.selectKnowledgeBasePolicies(knowledgeBaseIds);
+        if (rows == null || rows.size() != knowledgeBaseIds.size()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "所选知识库不存在或已删除");
+        }
+
+        if (knowledgeBaseIds.size() == 1) {
+            return new EffectivePolicy(modeFromPolicy(rows.get(0)), "KNOWLEDGE_BASE");
+        }
+
+        if (requestMode != null) {
+            return new EffectivePolicy(requestMode, "REQUEST");
+        }
+
+        RetrievalMode commonMode = null;
+        for (Map<String, Object> row : rows) {
+            RetrievalMode rowMode = modeFromPolicy(row);
+            if (commonMode == null) {
+                commonMode = rowMode;
+            } else if (commonMode != rowMode) {
+                throw new BusinessException(
+                        ErrorCode.PARAM_INVALID,
+                        "所选知识库检索策略不一致，请选择检索模式");
+            }
+        }
+        return new EffectivePolicy(commonMode, "MULTI_KB_CONSENSUS");
+    }
+
+    private RetrievalMode modeFromPolicy(Map<String, Object> row) {
+        Object value = row == null ? null : row.get("retrievalStrategy");
+        return RetrievalMode.from(value == null ? null : String.valueOf(value));
     }
 
     private void assertThreshold(String field, double value) {
@@ -374,12 +416,31 @@ public class RetrievalServiceImpl implements RetrievalService {
         return summary;
     }
 
-    private RetrievalSearchResponse emptyResponse(long begin) {
+    private RetrievalSearchResponse emptyResponse(long begin, NormalizedRequest normalized, AiRetrievalResponse aiResponse) {
         RetrievalSearchResponse response = new RetrievalSearchResponse();
         response.setRecords(Collections.<RetrievalResultItem>emptyList());
         response.setTotal(0);
         response.setElapsedMs(System.currentTimeMillis() - begin);
+        fillPolicyFields(response, normalized, aiResponse);
         return response;
+    }
+
+    private void fillPolicyFields(RetrievalSearchResponse response,
+                                  NormalizedRequest normalized,
+                                  AiRetrievalResponse aiResponse) {
+        response.setEffectiveMode(normalized.mode == null ? null : normalized.mode.name());
+        response.setModeSource(normalized.modeSource);
+        response.setDegradedMode(aiResponse == null ? null : aiResponse.getDegradedMode());
+    }
+
+    private static class EffectivePolicy {
+        private final RetrievalMode mode;
+        private final String source;
+
+        private EffectivePolicy(RetrievalMode mode, String source) {
+            this.mode = mode;
+            this.source = source;
+        }
     }
 
     private static class NormalizedRequest {
@@ -387,6 +448,7 @@ public class RetrievalServiceImpl implements RetrievalService {
         private List<Long> knowledgeBaseIds;
         private List<String> tags;
         private RetrievalMode mode;
+        private String modeSource;
         private int topK;
         private double similarityThreshold;
         private int rerankTopN;

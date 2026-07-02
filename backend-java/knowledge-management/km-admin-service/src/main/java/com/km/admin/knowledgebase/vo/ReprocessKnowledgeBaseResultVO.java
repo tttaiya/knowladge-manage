@@ -13,6 +13,8 @@ public class ReprocessKnowledgeBaseResultVO {
     private Long knowledgeBaseId;
     private Long taskId;
     private Integer readyDocumentCount;
+    private Integer taskCount;
+    private Long strategyVersion;
     private String message;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -26,6 +28,12 @@ public class ReprocessKnowledgeBaseResultVO {
 
     public Integer getReadyDocumentCount() { return readyDocumentCount; }
     public void setReadyDocumentCount(Integer readyDocumentCount) { this.readyDocumentCount = readyDocumentCount; }
+
+    public Integer getTaskCount() { return taskCount; }
+    public void setTaskCount(Integer taskCount) { this.taskCount = taskCount; }
+
+    public Long getStrategyVersion() { return strategyVersion; }
+    public void setStrategyVersion(Long strategyVersion) { this.strategyVersion = strategyVersion; }
 
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }

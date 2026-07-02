@@ -3,7 +3,7 @@
     :model-value="visible"
     :title="mode === 'create' ? '新建知识库' : '编辑知识库'"
     width="640"
-    @update:model-value="(v: boolean) => emit('update:visible', v)"
+    @update:model-value="handleVisibleChange"
     @close="onClose"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
@@ -47,7 +47,8 @@
         v-if="strategyChanged"
         type="warning"
         :closable="false"
-        title="策略变更将触发知识库下所有文档的重新切片与向量化（REPROCESS 任务）。请确认后勾选确认框。"
+        title="策略变更确认"
+        description="保存后将为该知识库所有 READY 文档创建新的处理版本。旧的已审核版本会继续提供检索；新的处理版本将在解析、切片、向量化完成后进入待审核；审核通过后，新版本才会替换当前 READY 版本。"
         show-icon
         style="margin-bottom: 12px"
       />
@@ -93,6 +94,10 @@ const emit = defineEmits<{
 
 const formRef = ref<FormInstance | null>(null)
 const submitting = ref(false)
+
+function handleVisibleChange(value: boolean) {
+  emit('update:visible', value)
+}
 
 const form = reactive({
   name: '',
@@ -241,7 +246,13 @@ async function onSubmit() {
       resp = await updateKnowledgeBase(props.kb!.id, payload, form.confirmation || undefined)
     }
     if (resp.code === 0) {
-      ElMessage.success(props.mode === 'create' ? '创建成功' : '已保存')
+      const successMessage =
+        props.mode === 'create'
+          ? '创建成功'
+          : strategyChanged.value
+            ? '已保存，并已为知识库文档创建 REPROCESS 任务'
+            : '已保存'
+      ElMessage.success(successMessage)
       emit('saved')
     } else {
       ElMessage.error(resp.message || '操作失败')

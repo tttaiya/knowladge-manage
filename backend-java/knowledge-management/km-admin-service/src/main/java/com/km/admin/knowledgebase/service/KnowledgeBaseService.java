@@ -56,11 +56,10 @@ public class KnowledgeBaseService {
     @Autowired
     private ObjectMapper objectMapper;
 
-    /** commit #29 注入：占位为 null，由 @Autowired(required=false) 引入；commit #29 改 @Autowired */
-    @Autowired(required = false)
+    @Autowired
     private KnowledgeBaseTaskFacade taskFacade;
 
-    @Autowired(required = false)
+    @Autowired
     private KnowledgeBaseDeleteFacade deleteFacade;
 
     // ============================================================
@@ -237,21 +236,17 @@ public class KnowledgeBaseService {
             throw new IllegalArgumentException("已删除知识库不可触发策略变更：id=" + id);
         }
 
-        // 真实任务创建（commit #29 启用 facade；commit #28 占位）
-        Long taskId = null;
-        if (taskFacade != null) {
-            taskId = taskFacade.createStrategyReprocessTask(kb, userId, userName);
-        } else {
-            log.warn("KnowledgeBaseTaskFacade 未注入，reprocess 仅返回 readyDocumentCount（commit #28 占位）");
-        }
+        int readyDocumentCount = taskFacade.countReprocessableDocuments(kb.getId());
+        Long taskId = taskFacade.createManualReprocessTask(kb, userId, userName);
 
         ReprocessKnowledgeBaseResultVO vo = new ReprocessKnowledgeBaseResultVO();
         vo.setKnowledgeBaseId(id);
         vo.setTaskId(taskId);
-        vo.setReadyDocumentCount(kb.getDocumentCount() == null ? 0 : kb.getDocumentCount());
-        vo.setMessage(taskId == null
-            ? "已记录策略变更请求（commit #28 占位，未创建真实任务）"
-            : "策略变更任务已创建，请前往任务中心查看进度");
+        vo.setReadyDocumentCount(readyDocumentCount);
+        vo.setTaskCount(readyDocumentCount);
+        vo.setStrategyVersion(kb.getStrategyVersion());
+        vo.setMessage(taskId == null ? "当前知识库没有可重处理的 READY 文档"
+            : "已创建真实 REPROCESS 任务，请前往任务中心查看进度");
         vo.setTriggeredAt(LocalDateTime.now());
         return vo;
     }
@@ -265,8 +260,8 @@ public class KnowledgeBaseService {
         if (req.getChunkStrategy() != null && !req.getChunkStrategy().equals(existing.getChunkStrategy())) return true;
         if (req.getChunkSize() != null && !req.getChunkSize().equals(existing.getChunkSize())) return true;
         if (req.getChunkOverlap() != null && !req.getChunkOverlap().equals(existing.getChunkOverlap())) return true;
-        if (req.getSeparatorsJson() != null && !req.getSeparatorsJson().equals(existing.getSeparatorsJson())) return true;
-        return false;
+        return req.getSeparatorsJson() != null
+            && !normalizeSeparatorsJson(req.getSeparatorsJson()).equals(normalizeSeparatorsJson(existing.getSeparatorsJson()));
     }
 
     private void validateCategory(String category) {

@@ -21,6 +21,7 @@ public class KnowledgeBaseVO {
     private String createdByUserId;
     private String createdByName;
     private Long strategyVersion;
+    private Integer isDeleted;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
@@ -63,6 +64,9 @@ public class KnowledgeBaseVO {
 
     public Long getStrategyVersion() { return strategyVersion; }
     public void setStrategyVersion(Long strategyVersion) { this.strategyVersion = strategyVersion; }
+
+    public Integer getIsDeleted() { return isDeleted; }
+    public void setIsDeleted(Integer isDeleted) { this.isDeleted = isDeleted; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

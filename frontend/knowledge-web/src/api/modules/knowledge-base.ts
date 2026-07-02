@@ -27,6 +27,7 @@ export interface KnowledgeBaseVO {
   createdByUserId?: string
   createdByName?: string
   strategyVersion: number
+  isDeleted?: number
   createdAt: string
   updatedAt?: string
   _isDeleted?: number
@@ -71,6 +72,8 @@ export interface ReprocessResultVO {
   knowledgeBaseId: number
   taskId?: number | null
   readyDocumentCount: number
+  taskCount?: number
+  strategyVersion?: number
   message: string
   triggeredAt: string
 }

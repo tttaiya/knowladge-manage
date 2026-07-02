@@ -3,10 +3,27 @@ package com.km.search.mapper;
 import com.km.search.dto.ChunkDetailRecord;
 import com.km.search.dto.DocTagRow;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 public interface RetrievalMapper {
+
+    @Select({
+            "<script>",
+            "SELECT id, retrieval_strategy AS retrievalStrategy",
+            "FROM km_knowledge_base",
+            "WHERE is_deleted = 0",
+            "  AND id IN",
+            "  <foreach collection='knowledgeBaseIds' item='kbId' open='(' separator=',' close=')'>",
+            "    #{kbId}",
+            "  </foreach>",
+            "</script>"
+    })
+    List<Map<String, Object>> selectKnowledgeBasePolicies(
+            @Param("knowledgeBaseIds")
+            List<Long> knowledgeBaseIds
+    );
 
     @Select({
             "<script>",

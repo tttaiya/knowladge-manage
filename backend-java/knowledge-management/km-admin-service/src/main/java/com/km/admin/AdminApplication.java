@@ -238,6 +238,21 @@ class TaskCommandService {
         return txService.createTask(cmd);
     }
 
+    public Long createKnowledgeBaseReprocessTask(Long docId, Long strategyVersion, String operatorUserId,
+                                                 String triggerSource, String idempotencyKey,
+                                                 Map<String, Object> payload) {
+        CreateTaskCommand cmd = new CreateTaskCommand("REPROCESS", docId, operatorUserId, triggerSource);
+        cmd.strategyVersion = strategyVersion;
+        if (payload != null) {
+            cmd.payload.putAll(payload);
+        }
+        cmd.payload.put("operation", "REPROCESS");
+        cmd.payload.put("docId", docId);
+        cmd.payload.put("strategyVersion", strategyVersion);
+        cmd.idempotencyKey = idempotencyKey;
+        return txService.createTask(cmd);
+    }
+
     /**
      * 系统任务，userId 固定为 null（R14：系统 PURGE 任务的 UUID 字段保持 null）。
      */
@@ -337,13 +352,15 @@ class TaskCommandTxService {
     @Transactional(rollbackFor = Exception.class)
     public Long createTask(CreateTaskCommand cmd) {
         Map<String, Object> doc = findDocumentForUpdate(cmd.docId);
-        Long targetVersionNo = null;
-        if ("REPROCESS".equals(cmd.taskType)) {
-            targetVersionNo = allocateBuildingVersion(cmd.docId, cmd.strategyVersion);
-        }
         TaskRow existing = findByIdempotencyKey(cmd.idempotencyKey);
         if (existing != null) {
             return existing.id;
+        }
+
+        Long targetVersionNo = null;
+        if ("REPROCESS".equals(cmd.taskType)) {
+            targetVersionNo = allocateBuildingVersion(cmd.docId, cmd.strategyVersion);
+            cmd.payload.put("targetVersionNo", targetVersionNo);
         }
 
         String payloadJson = toJson(cmd.payload);
@@ -376,6 +393,10 @@ class TaskCommandTxService {
             return ps;
         }, keyHolder);
         Long taskId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+        if ("REPROCESS".equals(cmd.taskType) && finalTargetVersionNo != null) {
+            jdbcTemplate.update("update km_document_version set task_id=? where doc_id=? and version_no=?",
+                    taskId, cmd.docId, finalTargetVersionNo);
+        }
         KmTaskMessage msg = KmTaskMessage.from(taskId, cmd, doc, traceId, finalTargetVersionNo, payloadJson);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -596,9 +617,10 @@ class TaskResultConsumer {
             jdbcTemplate.update("update km_document set document_status='PENDING_REVIEW', updated_at=now() where id=?", msg.docId);
         } else if ("REPROCESS".equals(msg.taskType)) {
             insertChunks(msg, false);
-            switchVersion(msg);
-            jdbcTemplate.update("update km_document set document_status='PENDING_REVIEW', current_version_no=?, updated_at=now() where id=?",
-                    msg.targetVersionNo, msg.docId);
+            jdbcTemplate.update("update km_document_version set version_status='PENDING_REVIEW' where doc_id=? and version_no=?",
+                    msg.docId, msg.targetVersionNo);
+            jdbcTemplate.update("update km_document set document_status='READY', updated_at=now() where id=?",
+                    msg.docId);
         } else if ("REEMBED".equals(msg.taskType)) {
             Map<String, Object> payload = msg.taskPayloadJson == null ? Collections.emptyMap() : readMap(msg.taskPayloadJson);
             Object chunkId = payload.get("chunkId");
@@ -636,8 +658,13 @@ class TaskResultConsumer {
         jdbcTemplate.update("update km_document_process_task set task_status='FAILED', error_stage=?, error_message=?, finished_at=now(), last_event_seq=?, last_event_id=?, updated_at=now() where id=?",
                 msg.errorStage, msg.errorMessage, msg.eventSeq, msg.eventId, msg.taskId);
         if ("PROCESS".equals(msg.taskType) || "REPROCESS".equals(msg.taskType)) {
-            jdbcTemplate.update("update km_document set document_status='FAILED', error_stage=?, error_message=?, updated_at=now() where id=?",
-                    msg.errorStage, msg.errorMessage, msg.docId);
+            if ("REPROCESS".equals(msg.taskType)) {
+                jdbcTemplate.update("update km_document_version set version_status='FAILED' where doc_id=? and version_no=?",
+                        msg.docId, msg.targetVersionNo);
+            } else {
+                jdbcTemplate.update("update km_document set document_status='FAILED', error_stage=?, error_message=?, updated_at=now() where id=?",
+                        msg.errorStage, msg.errorMessage, msg.docId);
+            }
         }
         if ("PURGE".equals(msg.taskType)) {
             jdbcTemplate.update("insert into km_purge_audit(doc_id, task_id, purge_status, error_stage, error_message, created_at) values(?,?,'FAILED',?,?,now())",

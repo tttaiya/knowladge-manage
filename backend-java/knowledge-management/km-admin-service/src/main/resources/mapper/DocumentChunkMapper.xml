@@ -33,7 +33,15 @@
                coalesce(is_edited, 0) as is_edited
         from km_document_chunk
         where doc_id = #{docId}
-          and is_active = 1
+          and (
+            is_active = 1
+            or version_no = (
+              select max(version_no)
+              from km_document_version
+              where doc_id = #{docId}
+                and version_status = 'PENDING_REVIEW'
+            )
+          )
         order by chunk_index asc
     </select>
 

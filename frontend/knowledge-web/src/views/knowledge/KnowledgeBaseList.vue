@@ -47,11 +47,11 @@
         <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="!row._isDeleted" link type="primary" @click="goDetail(row)">详情</el-button>
-            <el-button v-if="!row._isDeleted" link type="primary" @click="goDocuments(row)">文档</el-button>
-            <el-button v-if="!row._isDeleted" link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button v-if="!row._isDeleted" link type="primary" @click="confirmReprocess(row)">策略变更</el-button>
-            <el-button v-if="!row._isDeleted" link type="danger" @click="confirmDelete(row)">删除</el-button>
+            <el-button v-if="!isDeleted(row)" link type="primary" @click="goDetail(row)">详情</el-button>
+            <el-button v-if="!isDeleted(row)" link type="primary" @click="goDocuments(row)">文档</el-button>
+            <el-button v-if="!isDeleted(row)" link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="!isDeleted(row)" link type="primary" @click="confirmReprocess(row)">策略变更</el-button>
+            <el-button v-if="!isDeleted(row)" link type="danger" @click="confirmDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -84,8 +84,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   batchDeleteKnowledgeBases,
   deleteKnowledgeBase,
+  getKnowledgeBaseDetail,
   listKnowledgeBases,
   reprocessKnowledgeBase,
+  type KnowledgeBaseDetailVO,
   type KnowledgeBaseVO,
 } from '@/api/modules/knowledge-base'
 import {
@@ -122,7 +124,7 @@ async function reload() {
       total.value = 0
       return
     }
-    rows.value = (resp.data.list || []).map((r) => ({ ...r, _isDeleted: r._isDeleted }))
+    rows.value = (resp.data.list || []).map((r) => ({ ...r, _isDeleted: r._isDeleted || r.isDeleted }))
     total.value = resp.data.total
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '查询失败')
@@ -145,10 +147,22 @@ function openCreate() {
   dialogVisible.value = true
 }
 
-function openEdit(row: KnowledgeBaseVO) {
-  dialogMode.value = 'edit'
-  editing.value = row
-  dialogVisible.value = true
+async function openEdit(row: KnowledgeBaseVO) {
+  loading.value = true
+  try {
+    const resp = await getKnowledgeBaseDetail(row.id)
+    if (resp.code !== 0) {
+      ElMessage.error(resp.message || '加载知识库详情失败')
+      return
+    }
+    dialogMode.value = 'edit'
+    editing.value = resp.data as KnowledgeBaseDetailVO
+    dialogVisible.value = true
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '加载知识库详情失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 function onSaved() {
@@ -199,7 +213,14 @@ async function confirmReprocess(row: KnowledgeBaseVO) {
   }
   const resp = await reprocessKnowledgeBase(row.id)
   if (resp.code === 0) {
-    ElMessage.success(resp.data.message || '已触发策略变更')
+    const taskCount = resp.data?.taskCount || 0
+    const strategyVersion = resp.data?.strategyVersion
+    const message =
+      taskCount > 0
+        ? `已创建 ${taskCount} 个 REPROCESS 任务${strategyVersion ? `（策略版本 v${strategyVersion}）` : ''}`
+        : (resp.data.message || '当前没有可重处理文档')
+    ElMessage.success(message)
+    reload()
   } else {
     ElMessage.error(resp.message || '触发失败')
   }
@@ -213,6 +234,10 @@ function strategyLabel(v: string) {
 }
 function chunkStrategyLabel(v: string) {
   return KB_CHUNK_STRATEGIES.find((s) => s.value === v)?.label || v
+}
+
+function isDeleted(row: KnowledgeBaseVO) {
+  return row.isDeleted === 1 || row._isDeleted === 1
 }
 
 onMounted(() => reload())

@@ -8,6 +8,9 @@ public class RetrievalSearchResponse {
     private List<RetrievalResultItem> records = new ArrayList<RetrievalResultItem>();
     private int total;
     private long elapsedMs;
+    private String effectiveMode;
+    private String modeSource;
+    private String degradedMode;
 
     public List<RetrievalResultItem> getRecords() {
         return records;
@@ -31,6 +34,30 @@ public class RetrievalSearchResponse {
 
     public void setElapsedMs(long elapsedMs) {
         this.elapsedMs = elapsedMs;
+    }
+
+    public String getEffectiveMode() {
+        return effectiveMode;
+    }
+
+    public void setEffectiveMode(String effectiveMode) {
+        this.effectiveMode = effectiveMode;
+    }
+
+    public String getModeSource() {
+        return modeSource;
+    }
+
+    public void setModeSource(String modeSource) {
+        this.modeSource = modeSource;
+    }
+
+    public String getDegradedMode() {
+        return degradedMode;
+    }
+
+    public void setDegradedMode(String degradedMode) {
+        this.degradedMode = degradedMode;
     }
 }
 
