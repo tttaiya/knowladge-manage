@@ -39,6 +39,8 @@ services:
 
       # 报告生成模块
       - ../../sql/V8__report_generation_module.sql:/docker-entrypoint-initdb.d/15_V8__report_generation_module.sql:ro
+      - ../../sql/V9__report_user_id_uuid.sql:/docker-entrypoint-initdb.d/16_V9__report_user_id_uuid.sql:ro
+      - ../../sql/V10__report_minio_storage.sql:/docker-entrypoint-initdb.d/17_V10__report_minio_storage.sql:ro
 
       - ../../sql/init-demo.sql:/docker-entrypoint-initdb.d/99_init_demo.sql:ro
     healthcheck:
@@ -130,6 +132,10 @@ services:
     entrypoint: >
       /bin/sh -c "mc alias set local http://minio:9000 kmminio kmminio123 &&
       mc mb -p local/km-files || true &&
+      mc mb -p local/report-materials || true &&
+      mc mb -p local/report-exports || true &&
+      mc anonymous set none local/report-materials &&
+      mc anonymous set none local/report-exports &&
       mc anonymous set none local/km-files"
     networks:
       - km-net
@@ -325,18 +331,26 @@ services:
       MYSQL_USERNAME: km
       MYSQL_PASSWORD: km123456
       NACOS_ADDR: nacos:8848
-      REPORT_EXPORT_BASE_DIR: /data/report-files
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: kmminio
+      MINIO_SECRET_KEY: kmminio123
+      REPORT_MATERIALS_BUCKET: report-materials
+      REPORT_EXPORTS_BUCKET: report-exports
+      KM_SEARCH_BASE_URL: http://km-search-service:9103
+      INTERNAL_TOKEN: demo-internal-token
       REPORT_LLM_ENABLED: ${REPORT_LLM_ENABLED:-false}
       REPORT_LLM_BASE_URL: ${REPORT_LLM_BASE_URL:-}
       REPORT_LLM_MODEL: ${REPORT_LLM_MODEL:-}
       REPORT_LLM_API_KEY: ${REPORT_LLM_API_KEY:-}
-    volumes:
-      - report-files:/data/report-files
     depends_on:
       mysql:
         condition: service_healthy
       nacos:
         condition: service_started
+      minio:
+        condition: service_healthy
+      km-search-service:
+        condition: service_healthy
     ports:
       - "9104:9104"
     healthcheck:
@@ -444,7 +458,6 @@ volumes:
   minio-data:
   chroma-data:
   super-biz-agent-data:
-  report-files:
   # F4 整合（commit #25）：task-files 命名卷（Worker 写 / FastAPI 读）
   task-files:
 

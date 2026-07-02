@@ -35,7 +35,7 @@ public class ReportRecord {
     private String fileUrl;
     private String docxUrl;
     private String pdfUrl;
-    private Long userId;
+    private String userId;
     @Version
     private Integer version;
     private String remark;

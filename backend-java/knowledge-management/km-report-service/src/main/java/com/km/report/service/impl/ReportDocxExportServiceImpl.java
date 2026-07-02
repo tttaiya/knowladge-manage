@@ -4,16 +4,20 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.km.report.common.context.LoginUserContext;
 import com.km.report.common.exception.BizException;
 import com.km.report.config.ReportExportProperties;
+import com.km.report.config.ReportStorageProperties;
 import com.km.report.dto.ExportDocxStyleConfig;
 import com.km.report.entity.ReportChapterContent;
 import com.km.report.entity.ReportExportTask;
 import com.km.report.entity.ReportRecord;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportChapterContentService;
 import com.km.report.service.ReportDocxExportService;
 import com.km.report.service.ReportExportTaskService;
+import com.km.report.service.ReportFileStorageService;
 import com.km.report.service.ReportRecordService;
 import com.km.report.service.ReportSystemConfigService;
 import com.km.report.vo.ReportExportResultVO;
+import com.km.report.vo.FileUploadVO;
 import org.apache.poi.xwpf.usermodel.Borders;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.TextAlignment;
@@ -30,12 +34,9 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
-import java.net.URLEncoder;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -55,16 +56,19 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
 
     @Resource
     private ReportSystemConfigService reportSystemConfigService;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @Resource
     private ReportExportProperties reportExportProperties;
+    @Resource
+    private ReportStorageProperties reportStorageProperties;
+    @Resource
+    private ReportFileStorageService reportFileStorageService;
 
     @Override
     public ReportExportResultVO regenerateDocx(Long reportId) {
-        ReportRecord reportRecord = reportRecordService.getById(reportId);
-        if (reportRecord == null) {
-            throw new BizException("报告不存在");
-        }
+        ReportRecord reportRecord = reportAccessService.requireOwnedRecord(reportId);
 
         List<ReportChapterContent> chapters = reportChapterContentService.list(
                 new LambdaQueryWrapper<ReportChapterContent>()
@@ -83,7 +87,7 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
         task.setExportFormat("DOCX");
         task.setStatus(1);
         task.setTriggerType("MANUAL");
-        task.setCreatorId(LoginUserContext.getUserId() == null ? 0L : LoginUserContext.getUserId());
+        task.setCreatorId(reportAccessService.currentUserId());
         task.setCreateTime(LocalDateTime.now());
         task.setDeleted(0);
         reportExportTaskService.save(task);
@@ -91,17 +95,8 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
         try {
             ExportDocxStyleConfig styleConfig = buildStyleConfig();
 
-            File baseDir = new File(reportExportProperties.getBaseDir());
-            if (!baseDir.exists()) {
-                boolean created = baseDir.mkdirs();
-                if (!created) {
-                    throw new BizException("创建导出目录失败");
-                }
-            }
-
             String safeReportName = sanitizeFileName(reportRecord.getReportName());
             String fileName = "report_" + reportId + "_" + System.currentTimeMillis() + "_" + safeReportName + ".docx";
-            File targetFile = new File(baseDir, fileName);
 
             XWPFDocument document = new XWPFDocument();
 
@@ -113,14 +108,24 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
                 createChapter(document, chapter, styleConfig);
             }
 
-            document.write(new java.io.FileOutputStream(targetFile));
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            document.write(outputStream);
             document.close();
 
-            String fileUrl = reportExportProperties.getUrlPrefix() + "/" + fileName;
+            byte[] content = outputStream.toByteArray();
+            FileUploadVO uploaded = reportFileStorageService.storeBytes(
+                    content,
+                    fileName,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    reportStorageProperties.getExportsBucket(),
+                    "docx");
+            String fileUrl = uploaded.getFileUrl();
 
             task.setStatus(2);
             task.setFileUrl(fileUrl);
-            task.setFileSize(targetFile.length());
+            task.setBucket(uploaded.getBucket());
+            task.setObjectKey(uploaded.getObjectKey());
+            task.setFileSize(uploaded.getFileSize());
             task.setFinishTime(LocalDateTime.now());
             reportExportTaskService.updateById(task);
 
@@ -164,31 +169,7 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
             throw new BizException("非法文件名");
         }
 
-        File file = new File(reportExportProperties.getBaseDir(), fileName);
-        if (!file.exists() || !file.isFile()) {
-            throw new BizException("文件不存在");
-        }
-
-        try (
-                BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(file));
-                OutputStream outputStream = response.getOutputStream()
-        ) {
-            String encodedFileName = URLEncoder.encode(file.getName(), "UTF-8").replaceAll("\\+", "%20");
-
-            response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFileName);
-            response.setHeader("Content-Length", String.valueOf(file.length()));
-
-            byte[] buffer = new byte[8192];
-            int len;
-            while ((len = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, len);
-            }
-
-            outputStream.flush();
-        } catch (Exception e) {
-            throw new BizException("文件下载失败：" + e.getMessage());
-        }
+        reportFileStorageService.download(reportStorageProperties.getExportsBucket() + "/" + fileName, response);
     }
 
     private ExportDocxStyleConfig buildStyleConfig() {
@@ -400,20 +381,20 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
         }
         String title = matcher.group(1);
         String url = matcher.group(2);
-        File imageFile = resolveImageFile(url);
-        if (imageFile == null || !imageFile.exists()) {
+        ObjectRef objectRef = resolveObjectRef(url);
+        if (objectRef == null) {
             XWPFParagraph paragraph = document.createParagraph();
             XWPFRun run = paragraph.createRun();
             run.setFontFamily(config.getFontName());
             run.setFontSize(config.getFontSize());
-            run.setText("图片：" + title + "（文件不存在：" + url + "）");
+            run.setText("图片：" + title + "（对象地址无效：" + url + "）");
             return;
         }
-        try (FileInputStream inputStream = new FileInputStream(imageFile)) {
+        try (InputStream inputStream = reportFileStorageService.open(objectRef.bucket, objectRef.objectKey)) {
             XWPFParagraph paragraph = document.createParagraph();
             paragraph.setAlignment(ParagraphAlignment.CENTER);
             XWPFRun run = paragraph.createRun();
-            run.addPicture(inputStream, pictureType(imageFile.getName()), imageFile.getName(), Units.toEMU(420), Units.toEMU(240));
+            run.addPicture(inputStream, pictureType(objectRef.objectKey), objectRef.fileName(), Units.toEMU(420), Units.toEMU(240));
             if (StringUtils.hasText(title)) {
                 XWPFParagraph caption = document.createParagraph();
                 caption.setAlignment(ParagraphAlignment.CENTER);
@@ -429,19 +410,19 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
         }
     }
 
-    private File resolveImageFile(String url) {
+    private ObjectRef resolveObjectRef(String url) {
         String prefix = reportExportProperties.getUrlPrefix() + "/";
         if (url.startsWith(prefix)) {
-            return new File(reportExportProperties.getBaseDir(), url.substring(prefix.length()));
+            return ObjectRef.from(url.substring(prefix.length()), reportStorageProperties.getMaterialsBucket());
         }
         if (url.startsWith("/")) {
             String marker = "/files/";
             int index = url.indexOf(marker);
             if (index >= 0) {
-                return new File(reportExportProperties.getBaseDir(), url.substring(index + marker.length()));
+                return ObjectRef.from(url.substring(index + marker.length()), reportStorageProperties.getMaterialsBucket());
             }
         }
-        return new File(reportExportProperties.getBaseDir(), url);
+        return ObjectRef.from(url, reportStorageProperties.getMaterialsBucket());
     }
 
     private int pictureType(String fileName) {
@@ -499,5 +480,31 @@ public class ReportDocxExportServiceImpl implements ReportDocxExportService {
 
     private String nullToEmpty(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private static class ObjectRef {
+        private final String bucket;
+        private final String objectKey;
+
+        private ObjectRef(String bucket, String objectKey) {
+            this.bucket = bucket;
+            this.objectKey = objectKey;
+        }
+
+        private static ObjectRef from(String value, String defaultBucket) {
+            if (!StringUtils.hasText(value) || value.contains("..")) {
+                return null;
+            }
+            int slash = value.indexOf('/');
+            if (slash > 0 && value.substring(0, slash).startsWith("report-")) {
+                return new ObjectRef(value.substring(0, slash), value.substring(slash + 1));
+            }
+            return new ObjectRef(defaultBucket, value);
+        }
+
+        private String fileName() {
+            int index = objectKey.lastIndexOf('/');
+            return index >= 0 ? objectKey.substring(index + 1) : objectKey;
+        }
     }
 }

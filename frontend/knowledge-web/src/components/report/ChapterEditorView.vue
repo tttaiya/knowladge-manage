@@ -57,6 +57,14 @@
               <MarkdownPreview :content="draft.content" />
             </div>
           </div>
+          <div v-if="references.length" class="reference-panel">
+            <div class="reference-panel__title">引用来源</div>
+            <div v-for="reference in references" :key="reference.id" class="reference-item">
+              <strong>{{ reference.sourceOrder }}. {{ reference.sourceTitle || '知识来源' }}</strong>
+              <span>chunk {{ reference.chunkId || '-' }} · score {{ formatScore(reference.retrievalScore) }}</span>
+              <p>{{ reference.excerptSnapshot }}</p>
+            </div>
+          </div>
         </template>
       </section>
     </div>
@@ -180,6 +188,7 @@ const emit = defineEmits(['update:reportId']);
 const localReportId = ref(props.reportId || 1);
 const chapters = ref([]);
 const selected = ref(null);
+const references = ref([]);
 const draft = reactive({ content: '', contentFormat: 'MARKDOWN', remark: '' });
 
 const tableDialog = reactive({
@@ -242,6 +251,7 @@ function selectChapter(chapter) {
   draft.content = chapter.content || '';
   draft.contentFormat = chapter.contentFormat || 'MARKDOWN';
   draft.remark = chapter.remark || '';
+  loadReferences(chapter.id);
 }
 
 function applyChapterUpdate(updatedChapter) {
@@ -254,6 +264,17 @@ function applyChapterUpdate(updatedChapter) {
   draft.content = updatedChapter.content || '';
   draft.contentFormat = updatedChapter.contentFormat || 'MARKDOWN';
   draft.remark = updatedChapter.remark || '';
+  loadReferences(updatedChapter.id);
+}
+
+async function loadReferences(chapterId) {
+  references.value = [];
+  if (!chapterId) return;
+  try {
+    references.value = await reportApi.listChapterReferences(chapterId);
+  } catch (error) {
+    references.value = [];
+  }
 }
 
 async function loadChapters() {
@@ -440,6 +461,12 @@ function chapterStatus(status) {
   if (status === 3) return '已编辑';
   return '未知';
 }
+
+function formatScore(score) {
+  if (score === null || score === undefined || score === '') return '-';
+  const num = Number(score);
+  return Number.isFinite(num) ? num.toFixed(4) : score;
+}
 </script>
 
 <style scoped>
@@ -560,6 +587,34 @@ function chapterStatus(status) {
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 16px;
   background: rgba(2, 8, 23, 0.48);
+}
+
+.reference-panel {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(80, 187, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(4, 11, 22, 0.42);
+}
+
+.reference-panel__title {
+  margin-bottom: 10px;
+  font-weight: 700;
+  color: var(--pt-text-primary);
+}
+
+.reference-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.reference-item span,
+.reference-item p {
+  margin: 0;
+  color: var(--pt-text-secondary);
+  font-size: 13px;
 }
 
 .editor-textarea {

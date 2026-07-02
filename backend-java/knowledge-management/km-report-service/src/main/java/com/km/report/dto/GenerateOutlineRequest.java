@@ -11,4 +11,5 @@ public class GenerateOutlineRequest {
     private String powerPlant;
     private Integer reportYear;
     private Integer fixedTemplate;
+    private Integer enableKnowledgeRetrieval;
 }

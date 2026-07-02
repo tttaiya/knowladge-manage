@@ -5,6 +5,7 @@ import com.km.report.dto.AiGenerateRequest;
 import com.km.report.dto.AiGenerateResponse;
 import com.km.report.dto.AiRewriteRequest;
 import com.km.report.entity.ReportChapterContent;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportAiService;
 import com.km.report.service.ReportChapterContentService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,9 +24,14 @@ public class ReportAiController {
     private ReportAiService reportAiService;
     @Resource
     private ReportChapterContentService reportChapterContentService;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @PostMapping("/outline/generate")
     public ApiResult<AiGenerateResponse> generateOutline(@RequestBody AiGenerateRequest request) {
+        if (request != null && request.getReportId() != null) {
+            reportAccessService.requireOwnedRecord(request.getReportId());
+        }
         return ApiResult.ok(reportAiService.generate(request));
     }
 
@@ -43,7 +49,7 @@ public class ReportAiController {
                 + "\n改写目标：" + safe(request.getRewriteGoal())
                 + "\n目标长度：" + request.getTargetLength());
         AiGenerateResponse response = reportAiService.generate(aiRequest);
-        ReportChapterContent chapter = reportChapterContentService.getById(request.getChapterId());
+        ReportChapterContent chapter = reportAccessService.requireOwnedChapter(request.getChapterId());
         if (chapter != null) {
             chapter.setContent(response.getContent());
             chapter.setContentFormat("MARKDOWN");

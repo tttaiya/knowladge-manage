@@ -160,6 +160,9 @@ export const reportApi = {
   deleteChapter(chapterId: number | string) {
     return unwrap(del(`/reports/chapters/${chapterId}`))
   },
+  listChapterReferences(chapterId: number | string) {
+    return unwrap(get(`/reports/chapters/${chapterId}/references`))
+  },
   regenerateDocx(reportId: number | string) {
     return unwrap(get(`/reports/records/${reportId}/export/docx/regenerate`))
   },

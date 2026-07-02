@@ -12,6 +12,7 @@ public class RetrievalResultItem {
     private String chapterPath;
     private Integer pageNo;
     private String chunkType;
+    private String vectorId;
     private String content;
     private String summary;
     private Double similarityScore;
@@ -81,6 +82,14 @@ public class RetrievalResultItem {
 
     public void setChunkType(String chunkType) {
         this.chunkType = chunkType;
+    }
+
+    public String getVectorId() {
+        return vectorId;
+    }
+
+    public void setVectorId(String vectorId) {
+        this.vectorId = vectorId;
     }
 
     public String getContent() {

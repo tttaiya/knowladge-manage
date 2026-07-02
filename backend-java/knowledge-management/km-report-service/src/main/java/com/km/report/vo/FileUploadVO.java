@@ -8,6 +8,8 @@ public class FileUploadVO {
     private String fileName;
     private String fileUrl;
     private String filePath;
+    private String bucket;
+    private String objectKey;
     private String fileExt;
     private Long fileSize;
 }

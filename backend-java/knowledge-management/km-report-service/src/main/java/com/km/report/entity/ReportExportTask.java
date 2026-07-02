@@ -18,10 +18,12 @@ public class ReportExportTask {
     private String exportFormat;
     private Integer status;
     private String fileUrl;
+    private String bucket;
+    private String objectKey;
     private Long fileSize;
     private String failReason;
     private String triggerType;
-    private Long creatorId;
+    private String creatorId;
     private LocalDateTime createTime;
     private LocalDateTime finishTime;
     @TableLogic

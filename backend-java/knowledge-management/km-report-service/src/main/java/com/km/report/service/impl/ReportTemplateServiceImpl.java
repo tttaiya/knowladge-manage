@@ -18,6 +18,7 @@ import com.km.report.mapper.ReportTemplateChapterMapper;
 import com.km.report.mapper.ReportTemplateMapper;
 import com.km.report.config.ReportExportProperties;
 import com.km.report.service.ReportFileStorageService;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportTemplateService;
 import com.km.report.utils.ChapterTreeUtil;
 import com.km.report.vo.FileUploadVO;
@@ -49,6 +50,8 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
 
     @Resource
     private ReportExportProperties reportExportProperties;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @Override
     public Page<TemplateVO> pageTemplates(TemplateQueryDTO queryDTO) {
@@ -60,6 +63,9 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
         wrapper.like(StringUtils.hasText(query.getKeyword()), ReportTemplate::getTemplateName, query.getKeyword())
                 .eq(StringUtils.hasText(query.getReportType()), ReportTemplate::getReportType, query.getReportType())
                 .eq(query.getStatus() != null, ReportTemplate::getStatus, query.getStatus())
+                .and(w -> w.eq(ReportTemplate::getTemplateScope, "GLOBAL")
+                        .or()
+                        .eq(ReportTemplate::getCreatorId, reportAccessService.currentUserId()))
                 .orderByDesc(ReportTemplate::getUpdateTime);
 
         Page<ReportTemplate> resultPage = this.page(page, wrapper);
@@ -73,6 +79,9 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
     public List<TemplateVO> listVisible(String reportType) {
         LambdaQueryWrapper<ReportTemplate> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StringUtils.hasText(reportType), ReportTemplate::getReportType, reportType)
+                .and(w -> w.eq(ReportTemplate::getTemplateScope, "GLOBAL")
+                        .or()
+                        .eq(ReportTemplate::getCreatorId, reportAccessService.currentUserId()))
                 .orderByDesc(ReportTemplate::getUpdateTime);
         return this.list(wrapper).stream().map(this::convertToVO).collect(Collectors.toList());
     }
@@ -90,14 +99,20 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
         String templateName = saveDTO.getTemplateName().trim();
         String reportType = StringUtils.hasText(saveDTO.getReportType()) ? saveDTO.getReportType().trim() : "";
         String templateScope = StringUtils.hasText(saveDTO.getTemplateScope()) ? saveDTO.getTemplateScope().trim() : "GLOBAL";
+        String currentUserId = reportAccessService.currentUserId();
 
-        ReportTemplate exist = this.getOne(Wrappers.<ReportTemplate>lambdaQuery()
+        LambdaQueryWrapper<ReportTemplate> duplicateWrapper = Wrappers.<ReportTemplate>lambdaQuery()
                 .eq(ReportTemplate::getTemplateName, templateName)
                 .eq(ReportTemplate::getReportType, reportType)
-                .eq(ReportTemplate::getTemplateScope, templateScope)
-                .last("LIMIT 1"));
+                .eq(ReportTemplate::getTemplateScope, templateScope);
+        if (!"GLOBAL".equalsIgnoreCase(templateScope)) {
+            duplicateWrapper.eq(ReportTemplate::getCreatorId, currentUserId);
+        }
+        ReportTemplate exist = this.getOne(duplicateWrapper.last("LIMIT 1"));
         if (exist != null) {
-            updateTemplateMeta(exist, saveDTO);
+            if (currentUserId.equals(exist.getCreatorId())) {
+                updateTemplateMeta(exist, saveDTO);
+            }
             return exist.getId();
         }
 
@@ -108,20 +123,25 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
         template.setTemplateScope(templateScope);
         template.setStatus(0);
         template.setChapterCount(0);
-        template.setCreatorId(LoginUserContext.getUserId() == null ? 0L : LoginUserContext.getUserId());
+        template.setCreatorId(currentUserId);
         template.setCreateTime(LocalDateTime.now());
         template.setUpdateTime(LocalDateTime.now());
         template.setDeleted(0);
         try {
             this.save(template);
         } catch (DuplicateKeyException duplicateKeyException) {
-            ReportTemplate existing = this.getOne(Wrappers.<ReportTemplate>lambdaQuery()
+            LambdaQueryWrapper<ReportTemplate> existingWrapper = Wrappers.<ReportTemplate>lambdaQuery()
                     .eq(ReportTemplate::getTemplateName, templateName)
                     .eq(ReportTemplate::getReportType, reportType)
-                    .eq(ReportTemplate::getTemplateScope, templateScope)
-                    .last("LIMIT 1"));
+                    .eq(ReportTemplate::getTemplateScope, templateScope);
+            if (!"GLOBAL".equalsIgnoreCase(templateScope)) {
+                existingWrapper.eq(ReportTemplate::getCreatorId, currentUserId);
+            }
+            ReportTemplate existing = this.getOne(existingWrapper.last("LIMIT 1"));
             if (existing != null) {
-                updateTemplateMeta(existing, saveDTO);
+                if (currentUserId.equals(existing.getCreatorId())) {
+                    updateTemplateMeta(existing, saveDTO);
+                }
                 return existing.getId();
             }
             throw duplicateKeyException;
@@ -134,14 +154,17 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
         if (saveDTO == null || saveDTO.getId() == null) {
             throw new BizException("模板不存在");
         }
-        ReportTemplate template = getTemplateById(saveDTO.getId());
+        ReportTemplate template = reportAccessService.requireOwnedTemplate(saveDTO.getId());
         updateTemplateMeta(template, saveDTO);
         this.updateById(template);
     }
 
     @Override
     public void deleteTemplate(Long id) {
-        Long count = reportRecordMapper.selectCount(new LambdaQueryWrapper<ReportRecord>().eq(ReportRecord::getTemplateId, id));
+        reportAccessService.requireOwnedTemplate(id);
+        Long count = reportRecordMapper.selectCount(new LambdaQueryWrapper<ReportRecord>()
+                .eq(ReportRecord::getTemplateId, id)
+                .eq(ReportRecord::getUserId, reportAccessService.currentUserId()));
         if (count > 0) {
             throw new BizException("模板不存在");
         }
@@ -151,7 +174,7 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
 
     @Override
     public void publishTemplate(Long id) {
-        ReportTemplate template = getTemplateById(id);
+        ReportTemplate template = reportAccessService.requireOwnedTemplate(id);
         long chapterCount = chapterMapper.selectCount(new LambdaQueryWrapper<ReportTemplateChapter>().eq(ReportTemplateChapter::getTemplateId, id));
         if (chapterCount == 0) {
             throw new BizException("模板没有章节，无法发布");
@@ -164,7 +187,7 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
 
     @Override
     public void offlineTemplate(Long id) {
-        ReportTemplate template = getTemplateById(id);
+        ReportTemplate template = reportAccessService.requireOwnedTemplate(id);
         template.setStatus(2);
         template.setUpdateTime(LocalDateTime.now());
         this.updateById(template);
@@ -172,7 +195,7 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
 
     @Override
     public List<ChapterTreeVO> getChapterTree(Long templateId) {
-        getTemplateById(templateId);
+        reportAccessService.requireVisibleTemplate(templateId);
         List<ReportTemplateChapter> chapters = chapterMapper.selectList(
                 new LambdaQueryWrapper<ReportTemplateChapter>()
                         .eq(ReportTemplateChapter::getTemplateId, templateId)
@@ -187,7 +210,7 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
         if (saveDTO == null || saveDTO.getTemplateId() == null) {
             throw new BizException("模板不存在");
         }
-        ReportTemplate template = getTemplateById(saveDTO.getTemplateId());
+        ReportTemplate template = reportAccessService.requireOwnedTemplate(saveDTO.getTemplateId());
         chapterMapper.delete(new LambdaQueryWrapper<ReportTemplateChapter>().eq(ReportTemplateChapter::getTemplateId, saveDTO.getTemplateId()));
         if (saveDTO.getChapters() != null && !saveDTO.getChapters().isEmpty()) {
             batchInsertChapters(saveDTO.getTemplateId(), 0L, "", saveDTO.getChapters());
@@ -200,7 +223,7 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
 
     @Override
     public TemplateVO uploadTemplateFile(Long templateId, MultipartFile file) {
-        ReportTemplate template = getTemplateById(templateId);
+        ReportTemplate template = reportAccessService.requireOwnedTemplate(templateId);
         FileUploadVO uploaded = reportFileStorageService.store(file, reportExportProperties.getTemplateDir());
         template.setOriginalFileName(uploaded.getOriginalFileName());
         template.setFileUrl(uploaded.getFileUrl());
@@ -264,7 +287,7 @@ public class ReportTemplateServiceImpl extends ServiceImpl<ReportTemplateMapper,
     }
 
     private ReportTemplate getTemplateById(Long id) {
-        ReportTemplate template = this.getById(id);
+        ReportTemplate template = reportAccessService.requireVisibleTemplate(id);
         if (template == null) {
             throw new BizException("模板不存在");
         }

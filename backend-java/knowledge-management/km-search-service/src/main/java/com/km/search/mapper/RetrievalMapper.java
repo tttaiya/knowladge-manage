@@ -29,11 +29,16 @@ public interface RetrievalMapper {
             "<script>",
             "SELECT d.id",
             "FROM km_document d",
+            "JOIN km_knowledge_base kb ON kb.id = d.kb_id",
             "<if test='tags != null and tags.size() &gt; 0'>",
             "JOIN km_document_tag t ON t.doc_id = d.id",
             "</if>",
             "WHERE d.document_status = 'READY'",
             "  AND d.is_deleted = 0",
+            "  AND kb.is_deleted = 0",
+            "<if test='userId != null and userId != \"\"'>",
+            "  AND (d.user_id = #{userId} OR kb.created_by_user_id = #{userId})",
+            "</if>",
             "<if test='knowledgeBaseIds != null and knowledgeBaseIds.size() &gt; 0'>",
             "  AND d.kb_id IN",
             "  <foreach collection='knowledgeBaseIds' item='kbId' open='(' separator=',' close=')'>",
@@ -58,7 +63,10 @@ public interface RetrievalMapper {
             List<String> tags,
 
             @Param("tagCount")
-            int tagCount
+            int tagCount,
+
+            @Param("userId")
+            String userId
     );
 
     /**
@@ -128,11 +136,17 @@ public interface RetrievalMapper {
             "  AND d.document_status = 'READY'",
             "  AND d.is_deleted = 0",
             "  AND kb.is_deleted = 0",
+            "<if test='userId != null and userId != \"\"'>",
+            "  AND (d.user_id = #{userId} OR kb.created_by_user_id = #{userId})",
+            "</if>",
             "</script>"
     })
     List<ChunkDetailRecord> selectChunkDetailsByVectorIds(
             @Param("vectorIds")
-            List<String> vectorIds
+            List<String> vectorIds,
+
+            @Param("userId")
+            String userId
     );
 
     @Select({

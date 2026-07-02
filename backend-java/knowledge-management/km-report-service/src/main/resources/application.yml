@@ -25,8 +25,16 @@ mybatis-plus:
 
 report:
   export:
-    base-dir: ${REPORT_EXPORT_BASE_DIR:/tmp/report-files}
     url-prefix: /api/v1/reports/files
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+    access-key: ${MINIO_ACCESS_KEY:kmminio}
+    secret-key: ${MINIO_SECRET_KEY:kmminio123}
+    materials-bucket: ${REPORT_MATERIALS_BUCKET:report-materials}
+    exports-bucket: ${REPORT_EXPORTS_BUCKET:report-exports}
+  search:
+    base-url: ${KM_SEARCH_BASE_URL:http://km-search-service:9103}
+    internal-token: ${INTERNAL_TOKEN:demo-internal-token}
   llm:
     enabled: ${REPORT_LLM_ENABLED:false}
     base-url: ${REPORT_LLM_BASE_URL:}

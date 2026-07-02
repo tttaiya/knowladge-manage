@@ -22,13 +22,7 @@ public class HeaderUserInterceptor implements HandlerInterceptor {
             writeUnauthorized(response, "missing user context");
             return false;
         }
-        try {
-            LoginUserContext.setUserId(Long.valueOf(userId));
-        } catch (NumberFormatException e) {
-            LoginUserContext.clear();
-            writeUnauthorized(response, "invalid numeric user context");
-            return false;
-        }
+        LoginUserContext.setUserId(userId.trim());
 
         return true;
     }

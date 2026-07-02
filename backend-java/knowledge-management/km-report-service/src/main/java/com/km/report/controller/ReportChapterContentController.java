@@ -11,6 +11,7 @@ import com.km.report.entity.ReportMaterial;
 import com.km.report.entity.ReportOutlineItem;
 import com.km.report.entity.ReportRecord;
 import com.km.report.service.ReportAiService;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportChapterContentService;
 import com.km.report.service.ReportMaterialService;
 import com.km.report.service.ReportOutlineItemService;
@@ -44,9 +45,12 @@ public class ReportChapterContentController {
     private ReportRecordService reportRecordService;
     @Resource
     private ReportMaterialService reportMaterialService;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @GetMapping("/report/{reportId}")
     public ApiResult<List<ReportChapterContent>> listByReport(@PathVariable Long reportId) {
+        reportAccessService.requireOwnedRecord(reportId);
         return ApiResult.ok(reportChapterContentService.list(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ReportChapterContent>()
                 .eq(ReportChapterContent::getReportId, reportId)
                 .orderByAsc(ReportChapterContent::getSort)
@@ -55,12 +59,12 @@ public class ReportChapterContentController {
 
     @GetMapping("/{chapterId}")
     public ApiResult<ReportChapterContent> getById(@PathVariable Long chapterId) {
-        return ApiResult.ok(reportChapterContentService.getById(chapterId));
+        return ApiResult.ok(reportAccessService.requireOwnedChapter(chapterId));
     }
 
     @PutMapping("/{chapterId}")
     public ApiResult<ReportChapterContent> update(@PathVariable Long chapterId, @RequestBody UpdateChapterContentRequest request) {
-        ReportChapterContent chapter = reportChapterContentService.getById(chapterId);
+        ReportChapterContent chapter = reportAccessService.requireOwnedChapter(chapterId);
         if (chapter != null) {
             if (request.getContent() != null) {
                 chapter.setContent(request.getContent());
@@ -81,17 +85,17 @@ public class ReportChapterContentController {
 
     @PostMapping("/{chapterId}/ai-regenerate")
     public ApiResult<ReportChapterContent> aiRegenerate(@PathVariable Long chapterId, @RequestBody UpdateChapterContentRequest request) {
-        ReportChapterContent chapter = reportChapterContentService.getById(chapterId);
-        if (chapter == null) { return ApiResult.ok(null); }
+        ReportChapterContent chapter = reportAccessService.requireOwnedChapter(chapterId);
         if (request != null && request.getContent() != null) { chapter.setContent(request.getContent()); }
         String currentContent = chapter.getContent() == null ? "" : chapter.getContent();
-        ReportRecord record = reportRecordService.getById(chapter.getReportId());
+        ReportRecord record = reportAccessService.requireOwnedRecord(chapter.getReportId());
         ReportOutlineItem outlineItem = null;
         if (chapter.getTemplateChapterId() != null) { outlineItem = reportOutlineItemService.getById(chapter.getTemplateChapterId()); }
         StringBuilder materialContext = new StringBuilder();
         if (record != null) {
             List<ReportMaterial> materials = reportMaterialService.list(
                 new LambdaQueryWrapper<ReportMaterial>().eq(ReportMaterial::getDeleted, 0)
+                    .eq(ReportMaterial::getCreatorId, reportAccessService.currentUserId())
                     .and(w -> w.eq(ReportMaterial::getReportType, record.getReportType())
                         .or().eq(ReportMaterial::getMajor, record.getMajor())
                         .or().eq(ReportMaterial::getPowerPlant, record.getPowerPlant()))
@@ -123,7 +127,7 @@ public class ReportChapterContentController {
 
     @PostMapping("/{chapterId}/table")
     public ApiResult<ReportChapterContent> insertTable(@PathVariable Long chapterId, @RequestBody InsertTableRequest request) {
-        ReportChapterContent chapter = reportChapterContentService.getById(chapterId);
+        ReportChapterContent chapter = reportAccessService.requireOwnedChapter(chapterId);
         if (chapter != null) {
             chapter.setContent((chapter.getContent() == null ? "" : chapter.getContent()) + "\n\n" + renderMarkdownTable(request));
             chapter.setContentFormat("MARKDOWN");
@@ -137,7 +141,7 @@ public class ReportChapterContentController {
 
     @PostMapping("/{chapterId}/image")
     public ApiResult<ReportChapterContent> insertImage(@PathVariable Long chapterId, @RequestBody InsertImageRequest request) {
-        ReportChapterContent chapter = reportChapterContentService.getById(chapterId);
+        ReportChapterContent chapter = reportAccessService.requireOwnedChapter(chapterId);
         if (chapter != null) {
             String title = request == null || request.getTitle() == null ? "图片" : request.getTitle();
             String imageUrl = request == null ? "" : request.getImageUrl();
@@ -153,6 +157,7 @@ public class ReportChapterContentController {
 
     @DeleteMapping("/{chapterId}")
     public ApiResult<Boolean> delete(@PathVariable Long chapterId) {
+        reportAccessService.requireOwnedChapter(chapterId);
         reportChapterContentService.removeById(chapterId);
         return ApiResult.ok(true);
     }

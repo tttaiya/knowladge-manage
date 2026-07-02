@@ -5,13 +5,18 @@ import com.km.report.common.exception.BizException;
 import com.km.report.dto.AiGenerateRequest;
 import com.km.report.dto.AiGenerateResponse;
 import com.km.report.dto.GenerateReportRequest;
+import com.km.report.dto.KnowledgeSearchHit;
 import com.km.report.entity.ReportChapterContent;
+import com.km.report.entity.ReportKnowledgeReference;
 import com.km.report.entity.ReportMaterial;
 import com.km.report.entity.ReportOutlineItem;
 import com.km.report.entity.ReportRecord;
+import com.km.report.mapper.ReportKnowledgeReferenceMapper;
 import com.km.report.service.ReportAiService;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportChapterContentService;
 import com.km.report.service.ReportGenerationService;
+import com.km.report.service.ReportKnowledgeSearchClient;
 import com.km.report.service.ReportMaterialService;
 import com.km.report.service.ReportOutlineItemService;
 import com.km.report.service.ReportRecordService;
@@ -19,7 +24,9 @@ import com.km.report.vo.ReportGenerationProgressVO;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -35,27 +42,41 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
     private ReportMaterialService reportMaterialService;
     @Resource
     private ReportAiService reportAiService;
+    @Resource
+    private ReportAccessService reportAccessService;
+    @Resource
+    private ReportKnowledgeSearchClient reportKnowledgeSearchClient;
+    @Resource
+    private ReportKnowledgeReferenceMapper reportKnowledgeReferenceMapper;
 
     @Override
     public ReportGenerationProgressVO startGenerate(GenerateReportRequest request) {
         GenerateContext context = prepareGeneration(request);
-        ReportGenerationProgressVO latest = null;
-        for (int index = 0; index < context.outlineItems.size(); index++) {
-            latest = generateOneChapter(context, index);
+        try {
+            ReportGenerationProgressVO latest = null;
+            for (int index = 0; index < context.outlineItems.size(); index++) {
+                latest = generateOneChapter(context, index);
+            }
+            context.record.setStatus(1);
+            context.record.setFinishedChapter(context.outlineItems.size());
+            context.record.setUpdateTime(LocalDateTime.now());
+            reportRecordService.updateById(context.record);
+            return latest;
+        } catch (Exception e) {
+            context.record.setStatus(2);
+            context.record.setFailReason(e.getMessage());
+            context.record.setUpdateTime(LocalDateTime.now());
+            reportRecordService.updateById(context.record);
+            if (e instanceof BizException) {
+                throw (BizException) e;
+            }
+            throw new BizException("报告生成失败：" + e.getMessage());
         }
-        context.record.setStatus(1);
-        context.record.setFinishedChapter(context.outlineItems.size());
-        context.record.setUpdateTime(LocalDateTime.now());
-        reportRecordService.updateById(context.record);
-        return latest;
     }
 
     @Override
     public ReportGenerationProgressVO getProgress(Long reportId) {
-        ReportRecord record = reportRecordService.getById(reportId);
-        if (record == null) {
-            throw new BizException("报告不存在");
-        }
+        ReportRecord record = reportAccessService.requireOwnedRecord(reportId);
         ReportGenerationProgressVO vo = new ReportGenerationProgressVO();
         vo.setReportId(reportId);
         vo.setTotalChapter(record.getTotalChapter());
@@ -69,10 +90,7 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
         if (request == null || request.getReportId() == null) {
             throw new BizException("报告ID不能为空");
         }
-        ReportRecord record = reportRecordService.getById(request.getReportId());
-        if (record == null) {
-            throw new BizException("报告不存在");
-        }
+        ReportRecord record = reportAccessService.requireOwnedRecord(request.getReportId());
         List<ReportOutlineItem> outlineItems = reportOutlineItemService.list(
                 new LambdaQueryWrapper<ReportOutlineItem>()
                         .eq(ReportOutlineItem::getReportId, request.getReportId())
@@ -93,7 +111,7 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
 
     private ReportGenerationProgressVO generateOneChapter(GenerateContext context, int index) {
         ReportOutlineItem outlineItem = context.outlineItems.get(index);
-        String content = buildChapterContent(context.record, outlineItem, context.materials);
+        ChapterDraft draft = buildChapterDraft(context.record, outlineItem, context.materials);
         ReportChapterContent chapter = reportChapterContentService.getOne(
                 new LambdaQueryWrapper<ReportChapterContent>()
                         .eq(ReportChapterContent::getReportId, context.record.getId())
@@ -116,12 +134,13 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
         chapter.setChapterNo(outlineItem.getChapterNo());
         chapter.setLevel(outlineItem.getLevel());
         chapter.setSort(outlineItem.getSort());
-        chapter.setContent(content);
+        chapter.setContent(draft.content);
         chapter.setContentFormat("MARKDOWN");
         chapter.setStatus(1);
-        chapter.setWordCount(content == null ? 0 : content.length());
+        chapter.setWordCount(draft.content == null ? 0 : draft.content.length());
         chapter.setUpdateTime(LocalDateTime.now());
         reportChapterContentService.saveOrUpdate(chapter);
+        saveKnowledgeReferences(context.record, chapter, draft.knowledgeHits);
 
         context.record.setFinishedChapter(index + 1);
         context.record.setUpdateTime(LocalDateTime.now());
@@ -129,8 +148,10 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
         return progress(context.record, outlineItem, index + 1, context.outlineItems.size(), "章节已生成");
     }
 
-    private String buildChapterContent(ReportRecord record, ReportOutlineItem outlineItem, List<ReportMaterial> materials) {
+    private ChapterDraft buildChapterDraft(ReportRecord record, ReportOutlineItem outlineItem, List<ReportMaterial> materials) {
         String materialContext = buildMaterialContext(materials);
+        List<KnowledgeSearchHit> knowledgeHits = resolveKnowledgeHits(record, outlineItem);
+        String knowledgeContext = buildKnowledgeContext(knowledgeHits);
         String chapterContext = buildChapterContext(record, outlineItem);
         if (reportAiService.enabled()) {
             AiGenerateRequest aiRequest = new AiGenerateRequest();
@@ -143,26 +164,103 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
                     + "\n章节编号：" + safe(outlineItem.getChapterNo())
                     + "\n章节标题：" + safe(outlineItem.getChapterTitle())
                     + "\n章节上下文：" + chapterContext
+                    + "\n知识库引用上下文：" + knowledgeContext
                     + "\n素材上下文：" + materialContext
                     + "\n请生成该章节正文，要求与上下文一致、可直接用于正式报告。" );
             AiGenerateResponse response = reportAiService.generate(aiRequest);
             if (response != null && response.getContent() != null && response.getContent().trim().length() > 0) {
-                return response.getContent().trim();
+                return new ChapterDraft(response.getContent().trim(), knowledgeHits);
             }
         }
         StringBuilder builder = new StringBuilder();
         builder.append(outlineItem.getChapterTitle()).append('\n');
         builder.append("基于已收集的材料对该章节进行正式撰写。\n");
+        if (knowledgeContext.length() > 0) {
+            builder.append(knowledgeContext);
+        }
         if (materialContext.length() > 0) {
             builder.append(materialContext);
         }
+        return new ChapterDraft(builder.toString(), knowledgeHits);
+    }
+
+    private List<KnowledgeSearchHit> resolveKnowledgeHits(ReportRecord record, ReportOutlineItem outlineItem) {
+        if (record.getEnableKnowledgeRetrieval() != null && record.getEnableKnowledgeRetrieval() == 0) {
+            return new ArrayList<KnowledgeSearchHit>();
+        }
+        String query = safe(record.getReportName()) + " " + safe(record.getReportType()) + " "
+                + safe(record.getMajor()) + " " + safe(record.getPowerPlant()) + " "
+                + safe(outlineItem.getChapterTitle()) + " " + safe(outlineItem.getGenerationPrompt());
+        return reportKnowledgeSearchClient.search(query, 5);
+    }
+
+    private String buildKnowledgeContext(List<KnowledgeSearchHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 0;
+        for (KnowledgeSearchHit hit : hits) {
+            builder.append("【知识引用").append(++index).append("】");
+            builder.append(safe(hit.getKbName())).append(" / ");
+            builder.append(safe(hit.getDocName()));
+            if (hit.getPageNo() != null) {
+                builder.append(" / 第").append(hit.getPageNo()).append("页");
+            }
+            builder.append('\n');
+            builder.append(safe(firstText(hit.getContent(), hit.getSummary()))).append('\n');
+        }
         return builder.toString();
+    }
+
+    private void saveKnowledgeReferences(ReportRecord record, ReportChapterContent chapter, List<KnowledgeSearchHit> hits) {
+        reportKnowledgeReferenceMapper.delete(new LambdaQueryWrapper<ReportKnowledgeReference>()
+                .eq(ReportKnowledgeReference::getReportId, record.getId())
+                .eq(ReportKnowledgeReference::getChapterId, chapter.getId()));
+        if (hits == null || hits.isEmpty()) {
+            return;
+        }
+        int order = 0;
+        for (KnowledgeSearchHit hit : hits) {
+            ReportKnowledgeReference reference = new ReportKnowledgeReference();
+            reference.setReportId(record.getId());
+            reference.setChapterId(chapter.getId());
+            reference.setKnowledgeBaseId(hit.getKbId());
+            reference.setDocumentId(hit.getDocId());
+            reference.setChunkId(hit.getChunkId());
+            reference.setVectorId(hit.getVectorId());
+            Double score = hit.getRerankScore() != null ? hit.getRerankScore() : hit.getSimilarityScore();
+            reference.setRetrievalScore(score == null ? null : BigDecimal.valueOf(score));
+            reference.setSourceTitle(buildSourceTitle(hit));
+            reference.setExcerptSnapshot(firstText(hit.getContent(), hit.getSummary()));
+            reference.setSourceOrder(++order);
+            reference.setCreateTime(LocalDateTime.now());
+            reportKnowledgeReferenceMapper.insert(reference);
+        }
+    }
+
+    private String buildSourceTitle(KnowledgeSearchHit hit) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(safe(hit.getKbName()));
+        if (builder.length() > 0) {
+            builder.append(" / ");
+        }
+        builder.append(safe(hit.getDocName()));
+        if (hit.getChapterPath() != null && hit.getChapterPath().trim().length() > 0) {
+            builder.append(" / ").append(hit.getChapterPath());
+        }
+        return builder.toString();
+    }
+
+    private String firstText(String primary, String fallback) {
+        return primary != null && primary.trim().length() > 0 ? primary : fallback;
     }
 
     private List<ReportMaterial> resolveMaterials(ReportRecord record) {
         return reportMaterialService.list(
                 new LambdaQueryWrapper<ReportMaterial>()
                         .eq(ReportMaterial::getDeleted, 0)
+                        .eq(ReportMaterial::getCreatorId, reportAccessService.currentUserId())
                         .and(wrapper -> wrapper
                                 .eq(ReportMaterial::getReportType, record.getReportType())
                                 .or()
@@ -231,6 +329,16 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
             this.record = record;
             this.outlineItems = outlineItems;
             this.materials = materials;
+        }
+    }
+
+    private static class ChapterDraft {
+        private final String content;
+        private final List<KnowledgeSearchHit> knowledgeHits;
+
+        private ChapterDraft(String content, List<KnowledgeSearchHit> knowledgeHits) {
+            this.content = content;
+            this.knowledgeHits = knowledgeHits;
         }
     }
 }
