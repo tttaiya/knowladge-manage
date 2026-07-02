@@ -57,7 +57,8 @@ import java.util.concurrent.TimeUnit;
     @MapperScan({
         "com.km.admin.review.mapper",
         "com.km.admin.document.mapper",
-        "com.km.admin.knowledgebase.mapper"
+        "com.km.admin.knowledgebase.mapper",
+        "com.km.admin.stats.mapper"
     }),
     @MapperScan(value = "com.km.admin.config", annotationClass = Mapper.class)
 })

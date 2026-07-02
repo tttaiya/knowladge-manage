@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.km.admin.stats.mapper.StatsMapper">
+
+    <!--
+        F8 数据统计 SQL 集合。
+        - 字段命名沿用项目其它 Mapper 的 camelCase 风格，由 mybatis.configuration.map-underscore-to-camel-case 自动映射。
+        - 文档表 km_document 的状态枚举：READY / PENDING_REVIEW / FAILED（与 AdminApplication 内 TaskResultConsumer 写入保持一致）。
+        - 任务表 km_document_process_task 的状态枚举：QUEUED / RUNNING / SUCCESS / FAILED。
+        - 趋势按 date(created_at) 分组；created_at 不受 is_deleted 逻辑删除影响（F2 v1.0 文档 6.1 节）。
+    -->
+
+    <select id="countKnowledgeBaseTotal" resultType="java.lang.Long">
+        select count(1)
+          from km_knowledge_base
+         where is_deleted = 0
+    </select>
+
+    <select id="countDocumentTotal" resultType="java.lang.Long">
+        select count(1)
+          from km_document
+         where is_deleted = 0
+    </select>
+
+    <select id="countChunkTotal" resultType="java.lang.Long">
+        select count(1)
+          from km_document_chunk c
+          join km_document d on d.id = c.doc_id
+         where c.is_active = 1
+           and d.is_deleted = 0
+    </select>
+
+    <select id="countDocumentByStatus" resultType="java.lang.Long">
+        select count(1)
+          from km_document
+         where is_deleted = 0
+           and document_status = #{status}
+    </select>
+
+    <select id="countProcessingTask" resultType="java.lang.Long">
+        select count(1)
+          from km_document_process_task
+         where task_status in ('QUEUED','RUNNING')
+    </select>
+
+    <!--
+        文档创建趋势（按日聚合）。
+        - DATE_FORMAT(created_at, '%Y-%m-%d') 与 Service 端 java.time.LocalDate 输出的字符串完全对齐。
+        - 入参 fromDate/toDate 为 yyyy-MM-dd 字符串，使用 STR_TO_DATE 还原为 DATE 比较，闭区间。
+        - 逻辑删除不影响 created_at，保留历史（F2 v1.0 文档 6.1）。
+    -->
+    <select id="selectDocumentTrend" resultType="com.km.admin.stats.dto.TrendDataDTO">
+        select date_format(created_at, '%Y-%m-%d') as date,
+               count(1) as count
+          from km_document
+         where created_at &gt;= str_to_date(#{fromDate}, '%Y-%m-%d')
+           and created_at &lt;  date_add(str_to_date(#{toDate}, '%Y-%m-%d'), interval 1 day)
+         group by date_format(created_at, '%Y-%m-%d')
+         order by date asc
+    </select>
+
+</mapper>
