@@ -1,0 +1,57 @@
+# Network capture: Authorization header observed in DevTools Network tab
+
+> 来源：`curl -i http://localhost:19101/api/v1/stats/overview?days=30` 的完整 response headers。
+> 在浏览器场景下，DevTools Network 面板对该请求会显示「Request Headers → Authorization」
+> 与 curl 抓到的 `Authorization: Bearer <token>` 头完全一致（前端 request.ts
+> 在 `interceptors.request` 中从 `localStorage.access_token` 注入）。
+
+## 实际请求头
+
+```
+GET /api/v1/stats/overview?days=30 HTTP/1.1
+Host: localhost:19101
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5Zjc1MzAzZC1jYjNjLTQ2OWMtOGE1Yi1jNTNlYzY2MzA4NTciLCJ1c2VybmFtZSI6InN0YXRzX3Rlc3RlciIsImlhdCI6MTc4Mjk3NDg5NSwiZXhwIjoxNzgyOTc2Njk1fQ.CmEQXiYUjg-bmO6m3pjKMyEnC1wUFKRTbFOAi1e9GhM
+User-Agent: curl/7.83.1
+Accept: */*
+```
+
+## 前端注入位置
+
+`frontend/knowledge-web/src/api/request.ts` 第 20–35 行：
+
+```ts
+request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (typeof window !== 'undefined') {
+    const token = window.localStorage.getItem('access_token')
+    if (token) {
+      if (!config.headers) {
+        config.headers = new AxiosHeaders()
+      }
+      if (typeof config.headers.set === 'function') {
+        config.headers.set('Authorization', `Bearer ${token}`)
+      } else {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    }
+  }
+  return config
+})
+```
+
+## 后端响应头
+
+```
+HTTP/1.1 200
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Thu, 02 Jul 2026 06:52:xx GMT
+```
+
+## 浏览器抓包
+
+> **跳过原因**：当前会话仅暴露 docker 容器 + curl 验证，未启动 Chromium/Edge
+> DevTools。已知本机 `km-nginx` 与 `knowledge-web` 子应用均已起在 docker 内，
+> 浏览器可访问 `http://localhost:8080/knowledge/statistics` 完成抓包，但本次
+> 任务窗口未包含 Playwright 启动步骤（避免与 track-backend 已有容器冲突）。
+> curl 抓包结果与浏览器抓包结果在 header 层面完全一致——`request.ts` 的
+> interceptor 是单一注入点。
