@@ -1,0 +1,5 @@
+﻿{
+    "status":  "UP",
+    "service":  "km-ai-service",
+    "module":  "parse-ocr-chunk"
+}

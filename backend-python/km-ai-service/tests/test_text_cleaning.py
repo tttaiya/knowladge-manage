@@ -8,7 +8,10 @@ from app.services.parsers.text_utils import (
     clean_document_text,
     clean_pdf_pages,
     clean_text,
+    garbled_character_ratio,
+    is_low_quality_text,
     repair_soft_line_breaks,
+    text_quality_score,
 )
 
 
@@ -109,3 +112,21 @@ def test_parse_pdf_applies_page_level_cleaning_before_returning_blocks():
     assert all("内部资料" not in block.content for block in blocks)
     assert [block.page_no for block in blocks] == [1, 2, 3]
     assert all(block.char_count == len(block.content) for block in blocks)
+
+
+def test_garbled_ratio_and_quality_score_distinguish_clean_text():
+    clean = "这是一段正常的项目文档，包含完整中文和数字 2026。"
+    dirty = "锟斤拷锟斤拷@@@###%%%^^^\ufffd\x00"
+
+    assert garbled_character_ratio(clean) < 0.05
+    assert garbled_character_ratio(dirty) > 0.30
+    assert text_quality_score(clean) > text_quality_score(dirty)
+    assert is_low_quality_text(dirty, min_chars=5)
+
+
+def test_short_clean_title_is_low_length_but_not_garbled():
+    title = "项目报告"
+
+    assert garbled_character_ratio(title) == 0
+    assert text_quality_score(title) >= 90
+    assert is_low_quality_text(title, min_chars=30)

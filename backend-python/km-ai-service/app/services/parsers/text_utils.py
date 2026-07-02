@@ -26,6 +26,21 @@ STRUCTURAL_LINE_RE = re.compile(
     r"第[一二三四五六七八九十百千万0-9]+[章节篇部分])"
 )
 SENTENCE_ENDINGS = tuple("。！？!?；;：:")
+MOJIBAKE_MARKERS = (
+    "锟斤拷",
+    "ï»¿",
+    "â€™",
+    "â€œ",
+    "â€",
+    "鏂囦欢",
+    "瑙ｆ瀽",
+    "杩斿洖",
+    "鎴愬姛",
+)
+UNUSUAL_SYMBOL_RUN_RE = re.compile(
+    r"[^\w\s\u3400-\u4dbf\u4e00-\u9fff，。！？；：、,.!?;:()（）\[\]【】《》"
+    r"“”‘’\"'…—+\-*/=%<>|]{4,}"
+)
 
 
 def ensure_file_exists(file_path: str) -> Path:
@@ -79,6 +94,71 @@ def clean_document_text(text: str) -> str:
             # 空行保留段落边界，但不影响相邻重复行判断。
             continue
     return clean_text("\n".join(result))
+
+
+def garbled_character_ratio(text: str) -> float:
+    """返回可疑字符比例；用于质量判断，不直接删除原文。"""
+    if not text:
+        return 0.0
+
+    total_positions = [index for index, char in enumerate(text) if not char.isspace()]
+    if not total_positions:
+        return 0.0
+
+    suspicious: set[int] = set()
+    for index, char in enumerate(text):
+        if char.isspace():
+            continue
+        category = unicodedata.category(char)
+        if char == "\ufffd" or category in {"Cc", "Cf", "Co", "Cs", "Cn"}:
+            suspicious.add(index)
+
+    for marker in MOJIBAKE_MARKERS:
+        start = 0
+        while True:
+            found = text.find(marker, start)
+            if found < 0:
+                break
+            suspicious.update(range(found, found + len(marker)))
+            start = found + len(marker)
+
+    for match in UNUSUAL_SYMBOL_RUN_RE.finditer(text):
+        suspicious.update(range(match.start(), match.end()))
+
+    return min(1.0, len(suspicious) / len(total_positions))
+
+
+def text_quality_score(text: str) -> int:
+    """文本质量分（0-100），综合乱码比例与可读字符比例。"""
+    if not text or not text.strip():
+        return 0
+    compact = "".join(char for char in text if not char.isspace())
+    useful = sum(
+        1
+        for char in compact
+        if char.isalnum() or "\u3400" <= char <= "\u9fff"
+    )
+    useful_ratio = useful / max(1, len(compact))
+    garbled_ratio = garbled_character_ratio(text)
+    score = 100 - int(garbled_ratio * 120)
+    if useful_ratio < 0.45:
+        score -= int((0.45 - useful_ratio) * 80)
+    return max(0, min(100, score))
+
+
+def is_low_quality_text(
+    text: str,
+    min_chars: int = 30,
+    garbled_threshold: float = 0.25,
+) -> bool:
+    """判断文本是否应尝试 OCR；最终是否替换仍需比较 OCR 结果质量。"""
+    cleaned = clean_document_text(text)
+    useful_chars = sum(1 for char in cleaned if char.isalnum())
+    return (
+        useful_chars < max(1, min_chars)
+        or garbled_character_ratio(text) >= garbled_threshold
+        or text_quality_score(text) < 55
+    )
 
 
 def clean_pdf_pages(page_texts: list[str]) -> list[str]:

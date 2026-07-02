@@ -1,0 +1,25 @@
+﻿{
+    "success":  true,
+    "taskId":  105,
+    "docId":  105,
+    "kbId":  1,
+    "traceId":  "docker-png-105",
+    "chunks":  [
+                   {
+                       "content":  "OCRÃ¥Â¾Ã§Ã¦ÂµÃ¨Â¯Ã¦Ã¤Â»Â¶\nÃ§Â¬Â¬Ã¤Â¸Ã§Â« Ã§Â³Â»Ã§Â»Ã¦Â¦Ã¨Â¿Â°\nÃ¦Â¬Ã¥Â¾Ã§Ã§Â¨Ã¤ÂºÃ¦ÂµÃ¨Â¯PaddleOCRÃ¤Â¸Â­Ã¦Ã¨Â¯Ã¥Â«Ã¨Â½Ã¥Ã£\nÃ¤Â¸Ã£Ã¦ÂµÃ¨Â¯Ã§Â®Ã¦\nÃ¨Â¯Ã¥Â«Ã¥Â¾Ã§Ã¤Â¸Â­Ã§Ã¤Â¸Â­Ã¦Ã¦Ã¥Â­Ã¯Â¼Ã¥Â¹Â¶Ã¨Â¿Ã¥parsedTextÃ£blocksÃ¥chunksÃ£",
+                       "pageNo":  1,
+                       "chunkType":  "ocr",
+                       "charCount":  131,
+                       "chunkIndex":  1
+                   },
+                   {
+                       "content":  "1.1Ã¦Ã¦Â¡Â£Ã¥Â¤Ã§Ã¦ÂµÃ§Â¨\nJavaWorkerÃ¨Â°Ã§Â¨PythonOCRÃ¦Ã¥Â¡Ã¯Â¼Ã¨Â·Ã¥Ã¨Â¯Ã¥Â«Ã§Â»Ã¦Ã¥Ã§Â»Â§Ã§Â»Â­Ã¨Â½Ã¥ÂºÃ£\nÃ¦Â³Â¨Ã¦Ã¯Â¼Ã¥Â¦Ã¦Ã¦Â²Â¡Ã¦Ã¥Â®Ã¨Â£paddleocrÃ¥paddlepaddleÃ¯Â¼Ã¥Â¾Ã§Ã¦ÂµÃ¨Â¯Ã¤Â¼Ã¥Â¤Â±Ã¨Â´Â¥Ã£",
+                       "chapterPath":  "//1.1Ã¦Ã¦Â¡Â£Ã¥Â¤Ã§Ã¦ÂµÃ§Â¨",
+                       "pageNo":  1,
+                       "chunkType":  "ocr",
+                       "charCount":  123,
+                       "chunkIndex":  2
+                   }
+               ],
+    "chunkCount":  2
+}

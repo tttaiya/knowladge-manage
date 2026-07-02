@@ -1,0 +1,29 @@
+﻿{
+    "success":  true,
+    "taskId":  103,
+    "docId":  103,
+    "kbId":  1,
+    "traceId":  "docker-pptx-103",
+    "extension":  "pptx",
+    "parsedText":  "PPTX è§£ææµè¯æä»¶\nç¨äºæµè¯ python-pptx æåå¹»ç¯çæå­\n\nç¬¬ä¸ç«  ç³»ç»æ¦è¿°\næ¬ç³»ç»æ¯æææ¡£ä¸ä¼ ãè§£æãOCRãåçåæ£ç´¢ã\nJava Worker è°ç¨ Python FastAPI æ¥å£è·å chunksã\n\n1.1 å¤çæµç¨\nä¸ä¼ ææ¡£ â è§£æ â åç â åéå â å¾\u0085å®¡æ ¸ â READYã",
+    "blocks":  [
+                   {
+                       "content":  "PPTX è§£ææµè¯æä»¶\nç¨äºæµè¯ python-pptx æåå¹»ç¯çæå­",
+                       "pageNo":  1,
+                       "blockType":  "paragraph",
+                       "charCount":  36
+                   },
+                   {
+                       "content":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°\næ¬ç³»ç»æ¯æææ¡£ä¸ä¼ ãè§£æãOCRãåçåæ£ç´¢ã\nJava Worker è°ç¨ Python FastAPI æ¥å£è·å chunksã",
+                       "pageNo":  2,
+                       "blockType":  "paragraph",
+                       "charCount":  75
+                   },
+                   {
+                       "content":  "1.1 å¤çæµç¨\nä¸ä¼ ææ¡£ â è§£æ â åç â åéå â å¾\u0085å®¡æ ¸ â READYã",
+                       "pageNo":  3,
+                       "blockType":  "paragraph",
+                       "charCount":  44
+                   }
+               ]
+}

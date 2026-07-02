@@ -1,0 +1,32 @@
+﻿{
+    "success":  true,
+    "taskId":  103,
+    "docId":  103,
+    "kbId":  1,
+    "traceId":  "docker-pptx-103",
+    "chunks":  [
+                   {
+                       "content":  "PPTX Ã¨Â§Â£Ã¦Ã¦ÂµÃ¨Â¯Ã¦Ã¤Â»Â¶\nÃ§Â¨Ã¤ÂºÃ¦ÂµÃ¨Â¯ python-pptx Ã¦Ã¥Ã¥Â¹Â»Ã§Â¯Ã§Ã¦Ã¥Â­",
+                       "pageNo":  1,
+                       "chunkType":  "paragraph",
+                       "charCount":  50,
+                       "chunkIndex":  1
+                   },
+                   {
+                       "content":  "Ã§Â¬Â¬Ã¤Â¸Ã§Â« Ã§Â³Â»Ã§Â»Ã¦Â¦Ã¨Â¿Â°\nÃ¦Â¬Ã§Â³Â»Ã§Â»Ã¦Â¯Ã¦Ã¦Ã¦Â¡Â£Ã¤Â¸Ã¤Â¼ Ã£Ã¨Â§Â£Ã¦Ã£OCRÃ£Ã¥Ã§Ã¥Ã¦Â£Ã§Â´Â¢Ã£\nJava Worker Ã¨Â°Ã§Â¨ Python FastAPI Ã¦Â¥Ã¥Â£Ã¨Â·Ã¥ chunksÃ£",
+                       "pageNo":  2,
+                       "chunkType":  "paragraph",
+                       "charCount":  105,
+                       "chunkIndex":  2
+                   },
+                   {
+                       "content":  "1.1 Ã¥Â¤Ã§Ã¦ÂµÃ§Â¨\nÃ¤Â¸Ã¤Â¼ Ã¦Ã¦Â¡Â£ Ã¢ Ã¨Â§Â£Ã¦ Ã¢ Ã¥Ã§ Ã¢ Ã¥Ã©Ã¥ Ã¢ Ã¥Â¾Ã¥Â®Â¡Ã¦ Â¸ Ã¢ READYÃ£",
+                       "chapterPath":  "//1.1 Ã¥Â¤Ã§Ã¦ÂµÃ§Â¨",
+                       "pageNo":  3,
+                       "chunkType":  "paragraph",
+                       "charCount":  59,
+                       "chunkIndex":  3
+                   }
+               ],
+    "chunkCount":  3
+}

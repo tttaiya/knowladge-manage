@@ -6,13 +6,16 @@ from pathlib import Path
 from app.schemas import ParsedBlock, TaskPayload
 from app.services.ocr import ocr_image
 from app.services.path_guard import MAX_PDF_PAGES
+from .pdf_layout import extract_page_text
 from .text_utils import (
     clean_document_text,
     clean_pdf_pages,
     clean_text,
     ensure_file_exists,
     guess_extension,
+    is_low_quality_text,
     read_text_file,
+    text_quality_score,
     update_chapter_path,
 )
 
@@ -21,6 +24,7 @@ TEXT_EXTENSIONS = {"txt", "md"}
 P0_EXTENSIONS = {"pdf", "docx", *TEXT_EXTENSIONS, *IMAGE_EXTENSIONS}
 P1_EXTENSIONS = {"pptx", "xlsx"}
 SUPPORTED_EXTENSIONS = P0_EXTENSIONS | P1_EXTENSIONS
+MAX_XLSX_CELLS = 1_000_000
 
 
 def parse_document(file_path: str, extension: str | None, payload: TaskPayload) -> tuple[str, list[ParsedBlock], str]:
@@ -62,7 +66,7 @@ def parse_document(file_path: str, extension: str | None, payload: TaskPayload) 
 
 
 def parse_pdf(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
-    """PDF：优先 PyMuPDF 提取文本层；文本太少则转图片走 PaddleOCR。"""
+    """PDF：坐标块排序后逐页质检；低质量页单独 OCR 并选择更优文本。"""
     try:
         import fitz  # PyMuPDF
     except Exception as exc:
@@ -80,50 +84,64 @@ def parse_pdf(path: Path, payload: TaskPayload) -> list[ParsedBlock]:
         if doc.page_count == 0:
             raise ValueError("PDF 不包含可解析页面")
 
-        page_texts = clean_pdf_pages(
-            [page.get_text("text") or "" for page in doc]
-        )
+        pages = list(doc)
+        extracted_texts = [extract_page_text(page) for page in pages]
+        selected_texts = list(extracted_texts)
+        block_types = ["paragraph"] * len(pages)
+        force_ocr = (payload.parse_backend or "").lower() == "paddleocr"
+
+        ocr_indexes: list[int] = []
+        if payload.enable_ocr:
+            for index, (page, text) in enumerate(zip(pages, extracted_texts)):
+                cleaned = clean_document_text(text)
+                useful_chars = sum(1 for char in cleaned if char.isalnum())
+                severe_quality_problem = bool(cleaned) and text_quality_score(text) < 55
+                short_text_needs_image_check = useful_chars < payload.min_pdf_text_chars
+                needs_ocr = force_ocr or severe_quality_problem or (
+                    short_text_needs_image_check
+                    and (_page_has_images(page) or not cleaned)
+                )
+                if needs_ocr and (
+                    force_ocr
+                    or is_low_quality_text(
+                        text, min_chars=payload.min_pdf_text_chars
+                    )
+                ):
+                    ocr_indexes.append(index)
+
+        if ocr_indexes:
+            with tempfile.TemporaryDirectory(prefix="km_pdf_ocr_") as tmp_dir:
+                for index in ocr_indexes:
+                    page = pages[index]
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                    image_path = Path(tmp_dir) / f"page_{index + 1}.png"
+                    pix.save(str(image_path))
+                    ocr_text, _ = ocr_image(image_path)
+                    if _prefer_ocr_text(
+                        extracted_texts[index],
+                        ocr_text or "",
+                        payload.min_pdf_text_chars,
+                        force_ocr,
+                    ):
+                        selected_texts[index] = ocr_text or ""
+                        block_types[index] = "ocr"
+
+        cleaned_pages = clean_pdf_pages(selected_texts)
         blocks: list[ParsedBlock] = []
-        for page_index, text in enumerate(page_texts, start=1):
+        for page_index, (text, block_type) in enumerate(
+            zip(cleaned_pages, block_types), start=1
+        ):
             if text:
                 blocks.append(
                     ParsedBlock(
                         content=text,
                         pageNo=page_index,
-                        blockType="paragraph",
+                        blockType=block_type,
                         chapterPath=None,
                         charCount=len(text),
                     )
                 )
-
-        total_chars = sum(len(block.content) for block in blocks)
-        if total_chars >= payload.min_pdf_text_chars or not payload.enable_ocr:
-            return blocks
-
-        # 扫描 PDF：文本层很少，按页渲染图片后 OCR；临时目录自动清理。
-        ocr_page_texts: list[str] = []
-        with tempfile.TemporaryDirectory(prefix="km_pdf_ocr_") as tmp_dir:
-            for page_index, page in enumerate(doc, start=1):
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-                image_path = Path(tmp_dir) / f"page_{page_index}.png"
-                pix.save(str(image_path))
-                text, _ = ocr_image(image_path)
-                ocr_page_texts.append(text or "")
-
-        ocr_blocks: list[ParsedBlock] = []
-        for page_index, text in enumerate(clean_pdf_pages(ocr_page_texts), start=1):
-            if text:
-                ocr_blocks.append(
-                    ParsedBlock(
-                        content=text,
-                        pageNo=page_index,
-                        blockType="ocr",
-                        chapterPath=None,
-                        charCount=len(text),
-                    )
-                )
-
-        return ocr_blocks
+        return blocks
 
 
 def parse_docx(path: Path) -> list[ParsedBlock]:
@@ -228,15 +246,85 @@ def parse_xlsx(path: Path) -> list[ParsedBlock]:
     except Exception as exc:
         raise RuntimeError("缺少 openpyxl，请执行：pip install openpyxl") from exc
 
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    # 普通模式才能读取 merged_cells；仅在内存中恢复，不修改原工作簿。
+    wb = openpyxl.load_workbook(str(path), read_only=False, data_only=True)
     blocks: list[ParsedBlock] = []
-    for sheet in wb.worksheets:
-        rows = []
-        for row in sheet.iter_rows(values_only=True):
-            values = [str(cell) if cell is not None else "" for cell in row]
-            if any(value.strip() for value in values):
-                rows.append("\t".join(values))
-        text = clean_text(f"工作表：{sheet.title}\n" + "\n".join(rows))
-        if text:
-            blocks.append(ParsedBlock(content=text, pageNo=None, blockType="table", chapterPath=sheet.title, charCount=len(text)))
+    try:
+        for sheet in wb.worksheets:
+            max_row = max(0, sheet.max_row or 0)
+            max_column = max(0, sheet.max_column or 0)
+            if max_row * max_column > MAX_XLSX_CELLS:
+                raise ValueError(
+                    f"XLSX 工作表过大：{sheet.title} 包含约 "
+                    f"{max_row * max_column} 个单元格（最大 {MAX_XLSX_CELLS}）"
+                )
+
+            merged_values = _merged_cell_values(sheet)
+            rows: list[str] = []
+            for row in sheet.iter_rows(
+                min_row=1,
+                max_row=max_row,
+                min_col=1,
+                max_col=max_column,
+            ):
+                values: list[str] = []
+                for cell in row:
+                    value = cell.value
+                    if value is None:
+                        value = merged_values.get((cell.row, cell.column))
+                    values.append(str(value) if value is not None else "")
+                if any(value.strip() for value in values):
+                    rows.append("\t".join(values))
+
+            text = clean_text(f"工作表：{sheet.title}\n" + "\n".join(rows))
+            if text:
+                blocks.append(
+                    ParsedBlock(
+                        content=text,
+                        pageNo=None,
+                        blockType="table",
+                        chapterPath=sheet.title,
+                        charCount=len(text),
+                    )
+                )
+    finally:
+        wb.close()
     return blocks
+
+
+def _page_has_images(page) -> bool:
+    try:
+        return bool(page.get_images(full=True))
+    except Exception:
+        return False
+
+
+def _prefer_ocr_text(
+    extracted_text: str,
+    ocr_text: str,
+    min_chars: int,
+    force_ocr: bool,
+) -> bool:
+    ocr_cleaned = clean_document_text(ocr_text)
+    if not ocr_cleaned:
+        return False
+    if force_ocr:
+        return True
+    extracted_cleaned = clean_document_text(extracted_text)
+    if not extracted_cleaned:
+        return True
+    if is_low_quality_text(extracted_text, min_chars=min_chars):
+        return text_quality_score(ocr_text) >= text_quality_score(extracted_text)
+    return text_quality_score(ocr_text) > text_quality_score(extracted_text) + 5
+
+
+def _merged_cell_values(sheet) -> dict[tuple[int, int], object]:
+    values: dict[tuple[int, int], object] = {}
+    for merged_range in sheet.merged_cells.ranges:
+        top_left = sheet.cell(merged_range.min_row, merged_range.min_col).value
+        if top_left is None:
+            continue
+        for row in range(merged_range.min_row, merged_range.max_row + 1):
+            for column in range(merged_range.min_col, merged_range.max_col + 1):
+                values[(row, column)] = top_left
+    return values

@@ -1,0 +1,124 @@
+﻿{
+    "success":  true,
+    "taskId":  102,
+    "docId":  102,
+    "kbId":  1,
+    "traceId":  "docker-docx-102",
+    "extension":  "docx",
+    "parsedText":  "ç¥è¯ç®¡çæ¨¡åæ¥å£æµè¯ææ¡£\n\nç¬¬ä¸ç«  ç³»ç»æ¦è¿°\n\næ¬ DOCX æä»¶ç¨äºæµè¯ python-docx ææ¡£è§£æå heading æ é¢å±çº§åçã\n\nä¸ãé¡¹ç®èæ¯\n\nçµåææ¯çç£è¾\u0085å©å¹³å°éè¦å°è§ç¨è§èãææ¯æ¥åãæ£æ¥æ¥åç­èµææ²æ·å°ç¥è¯åºä¸­ã\n\n1.1 ææ¡£å¤çæµç¨\n\nç¨æ·ä¸ä¼ ææ¡£åï¼Java Worker è°ç¨ Python FastAPI ç parse å chunk æ¥å£ï¼è·å blocks å chunksã\n\n1.1.1 OCRè¯å«æµç¨\n\nå½ææ¡£ä¸ºå¾çææ«æ PDF æ¶ï¼ç³»ç»è°ç¨ PaddleOCR è¯å«ä¸­ææå­ã\n\nç¬¬äºç«  æµè¯å­æ®µ\n\næµè¯å­æ®µï¼docId\n\næµè¯å­æ®µï¼kbId\n\næµè¯å­æ®µï¼filePath\n\næµè¯å­æ®µï¼extension\n\næµè¯å­æ®µï¼chunkMode\n\næµè¯å­æ®µï¼chunkSize\n\næµè¯å­æ®µï¼overlap\n\næµè¯å­æ®µï¼separator\n\nææç»æï¼success=trueï¼parsedText æå\u0085å®¹ï¼chunks æ°ç»ä¸ä¸ºç©ºã",
+    "blocks":  [
+                   {
+                       "content":  "ç¥è¯ç®¡çæ¨¡åæ¥å£æµè¯ææ¡£",
+                       "blockType":  "paragraph",
+                       "charCount":  12
+                   },
+                   {
+                       "content":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°",
+                       "charCount":  8
+                   },
+                   {
+                       "content":  "æ¬ DOCX æä»¶ç¨äºæµè¯ python-docx ææ¡£è§£æå heading æ é¢å±çº§åçã",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°",
+                       "charCount":  47
+                   },
+                   {
+                       "content":  "ä¸ãé¡¹ç®èæ¯",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°/ä¸ãé¡¹ç®èæ¯",
+                       "charCount":  6
+                   },
+                   {
+                       "content":  "çµåææ¯çç£è¾\u0085å©å¹³å°éè¦å°è§ç¨è§èãææ¯æ¥åãæ£æ¥æ¥åç­èµææ²æ·å°ç¥è¯åºä¸­ã",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°/ä¸ãé¡¹ç®èæ¯",
+                       "charCount":  38
+                   },
+                   {
+                       "content":  "1.1 ææ¡£å¤çæµç¨",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°/1.1 ææ¡£å¤çæµç¨",
+                       "charCount":  10
+                   },
+                   {
+                       "content":  "ç¨æ·ä¸ä¼ ææ¡£åï¼Java Worker è°ç¨ Python FastAPI ç parse å chunk æ¥å£ï¼è·å blocks å chunksã",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°/1.1 ææ¡£å¤çæµç¨",
+                       "charCount":  76
+                   },
+                   {
+                       "content":  "1.1.1 OCRè¯å«æµç¨",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°/1.1 ææ¡£å¤çæµç¨/1.1.1 OCRè¯å«æµç¨",
+                       "charCount":  13
+                   },
+                   {
+                       "content":  "å½ææ¡£ä¸ºå¾çææ«æ PDF æ¶ï¼ç³»ç»è°ç¨ PaddleOCR è¯å«ä¸­ææå­ã",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬ä¸ç«  ç³»ç»æ¦è¿°/1.1 ææ¡£å¤çæµç¨/1.1.1 OCRè¯å«æµç¨",
+                       "charCount":  38
+                   },
+                   {
+                       "content":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  8
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼docId",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  10
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼kbId",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  9
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼filePath",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  13
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼extension",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  14
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼chunkMode",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  14
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼chunkSize",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  14
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼overlap",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  12
+                   },
+                   {
+                       "content":  "æµè¯å­æ®µï¼separator",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  14
+                   },
+                   {
+                       "content":  "ææç»æï¼success=trueï¼parsedText æå\u0085å®¹ï¼chunks æ°ç»ä¸ä¸ºç©ºã",
+                       "blockType":  "paragraph",
+                       "chapterPath":  "ç¬¬äºç«  æµè¯å­æ®µ",
+                       "charCount":  46
+                   }
+               ]
+}
