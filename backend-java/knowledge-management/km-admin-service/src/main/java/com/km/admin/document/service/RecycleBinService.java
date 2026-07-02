@@ -6,6 +6,7 @@ import com.km.admin.document.entity.KmDocument;
 import com.km.admin.document.infrastructure.MinioClientAdapter;
 import com.km.admin.document.mapper.DocumentManageMapper;
 import com.km.admin.document.mapper.DocumentTagMapper;
+import com.km.admin.knowledgebase.mapper.KnowledgeBaseMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ public class RecycleBinService {
     private final DocumentTagMapper documentTagMapper;
     private final MinioClientAdapter minioClientAdapter;
     private final DocumentTaskFacade documentTaskFacade;
+    private final KnowledgeBaseMapper knowledgeBaseMapper;
 
     @Value("${km.recycle.retention-days:30}")
     private int retentionDays;
@@ -36,11 +38,13 @@ public class RecycleBinService {
     public RecycleBinService(DocumentManageMapper documentMapper,
                              DocumentTagMapper documentTagMapper,
                              MinioClientAdapter minioClientAdapter,
-                             DocumentTaskFacade documentTaskFacade) {
+                             DocumentTaskFacade documentTaskFacade,
+                             KnowledgeBaseMapper knowledgeBaseMapper) {
         this.documentMapper = documentMapper;
         this.documentTagMapper = documentTagMapper;
         this.minioClientAdapter = minioClientAdapter;
         this.documentTaskFacade = documentTaskFacade;
+        this.knowledgeBaseMapper = knowledgeBaseMapper;
     }
 
     public PageResult<KmDocument> listRecycleBin(Long kbId, int page, int pageSize) {
@@ -65,6 +69,9 @@ public class RecycleBinService {
         int affected = documentMapper.restore(docId);
         if (affected == 0) {
             throw new IllegalStateException("恢复失败，请刷新后重试");
+        }
+        if (doc.getKbId() != null) {
+            knowledgeBaseMapper.incrementDocumentCount(doc.getKbId());
         }
     }
 

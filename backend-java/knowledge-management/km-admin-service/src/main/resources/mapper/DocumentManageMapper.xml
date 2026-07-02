@@ -148,6 +148,14 @@
         LIMIT 1
     </select>
 
+    <select id="selectTasksByDocId" resultType="java.util.Map">
+        SELECT id, doc_id, task_type, trigger_source, task_status, progress, error_stage, error_message,
+               retry_count, created_at, started_at, finished_at
+        FROM km_document_process_task
+        WHERE doc_id = #{docId}
+        ORDER BY id DESC
+    </select>
+
     <update id="updateUploaderSnapshot">
         UPDATE km_document
         SET user_id = #{uploaderUserId},

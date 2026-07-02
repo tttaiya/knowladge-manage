@@ -2,6 +2,7 @@ package com.km.admin.document.entity;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 文档实体。R12：字段名按 SQL 真实列名做别名映射（file_name -> originalName 等）。
@@ -36,6 +37,8 @@ public class KmDocument implements Serializable {
     private LocalDateTime deletedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 非 DB 列，列表/详情查询时填充 */
+    private List<String> tags;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -99,4 +102,7 @@ public class KmDocument implements Serializable {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public List<String> getTags() { return tags; }
+    public void setTags(List<String> tags) { this.tags = tags; }
 }

@@ -47,6 +47,8 @@ public interface DocumentManageMapper {
      */
     java.util.Map<String, Object> selectLatestTaskByDocId(@Param("docId") Long docId);
 
+    List<java.util.Map<String, Object>> selectTasksByDocId(@Param("docId") Long docId);
+
     int updateUploaderSnapshot(@Param("id") Long id,
                                @Param("uploaderUserId") String uploaderUserId,
                                @Param("uploaderName") String uploaderName);

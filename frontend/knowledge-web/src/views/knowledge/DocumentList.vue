@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TableInstance } from 'element-plus'
@@ -9,10 +9,12 @@ import {
   batchDeleteDocuments,
   deleteDocument,
   fetchDocumentChunks,
+  fetchDocumentTasks,
   fetchDocuments,
   normalizeTags,
   updateDocumentTags,
   validateTags,
+  type DocumentTask,
 } from '@/api/modules/document'
 import type { DocumentItem, DocumentStatus } from '@/types/knowledge'
 
@@ -41,6 +43,35 @@ const tagSaving = ref(false)
 const chunkDialogVisible = ref(false)
 const chunkLoading = ref(false)
 const chunks = ref<{ chunkIndex: number; content: string; charCount: number }[]>([])
+
+const taskDrawerVisible = ref(false)
+const taskDrawerDoc = ref<DocumentItem | null>(null)
+const taskDrawerHighlightFailed = ref(false)
+const taskLoading = ref(false)
+const tasks = ref<DocumentTask[]>([])
+
+const latestTask = computed(() => tasks.value[0])
+
+const taskDisplayState = computed<'empty' | 'processing' | 'success' | 'failed'>(() => {
+  const status = latestTask.value?.taskStatus
+  if (status === 'FAILED') return 'failed'
+  if (status === 'QUEUED' || status === 'RUNNING') return 'processing'
+  if (status === 'SUCCESS') return 'success'
+  return 'empty'
+})
+
+const taskStateHint = computed(() => {
+  switch (taskDisplayState.value) {
+    case 'processing':
+      return '最新任务进行中，请稍后刷新列表查看文档状态。'
+    case 'success':
+      return '最新任务已成功完成，文档状态以列表中的 document_status 为准。'
+    case 'failed':
+      return '最新任务失败，请查看失败阶段与原因，必要时联系管理员重试。'
+    default:
+      return '该文档暂无处理任务记录（可能尚未通过 Gateway 上传或未创建 PROCESS 任务）。'
+  }
+})
 
 const statusOptions = [
   { label: '全部', value: '' },
@@ -93,7 +124,7 @@ async function handleDelete(row: DocumentItem) {
     await ElMessageBox.confirm(
       `确定删除文档「${row.originalName}」？\n\n` +
         '· 文档将从列表中移除并进入回收站（保留 30 天）\n' +
-        '· 关联向量数据将同步标记失效，不再参与检索',
+        '· 检索侧将通过 is_deleted 过滤，不再返回该文档',
       '确认删除',
       {
         type: 'warning',
@@ -132,7 +163,7 @@ async function handleBatchDelete() {
     await ElMessageBox.confirm(
       `确定删除选中的 ${count} 篇文档？\n\n` +
         '· 文档将从列表中移除并进入回收站（保留 30 天）\n' +
-        '· 关联向量数据将同步标记失效，不再参与检索',
+        '· 检索侧将通过 is_deleted 过滤，不再返回这些文档',
       '批量删除',
       {
         type: 'warning',
@@ -208,6 +239,60 @@ async function openChunkDialog(row: DocumentItem) {
   }
 }
 
+function taskStatusLabel(status?: string) {
+  const map: Record<string, string> = {
+    QUEUED: '排队中',
+    RUNNING: '处理中',
+    SUCCESS: '成功',
+    FAILED: '失败',
+  }
+  return status ? map[status] ?? status : '-'
+}
+
+function taskTypeLabel(type?: string) {
+  const map: Record<string, string> = {
+    PROCESS: '首次处理',
+    RETRY: '重试',
+    REPROCESS: '重新处理',
+    REEMBED: '重向量化',
+    PURGE: '永久清理',
+  }
+  return type ? map[type] ?? type : '-'
+}
+
+function isTaskHighlighted(task: DocumentTask) {
+  if (!taskDrawerHighlightFailed.value) return false
+  return latestTask.value?.taskStatus === 'FAILED' && latestTask.value.id === task.id
+}
+
+async function loadTasks() {
+  const docId = taskDrawerDoc.value?.id
+  if (!docId) {
+    tasks.value = []
+    return
+  }
+  taskLoading.value = true
+  try {
+    tasks.value = await fetchDocumentTasks(docId)
+  } catch (error: any) {
+    tasks.value = []
+    ElMessage.error(error?.message ?? '加载任务详情失败')
+  } finally {
+    taskLoading.value = false
+  }
+}
+
+function openTaskDrawer(row: DocumentItem, highlightFailed = false) {
+  taskDrawerDoc.value = row
+  taskDrawerHighlightFailed.value = highlightFailed
+  taskDrawerVisible.value = true
+}
+
+function closeTaskDrawer() {
+  taskDrawerVisible.value = false
+  tasks.value = []
+}
+
 function formatSize(size: number) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -226,6 +311,18 @@ function onUploadSuccess() {
 }
 
 watch([page, pageSize, statusFilter], () => loadDocuments())
+
+watch(
+  () => [taskDrawerVisible.value, taskDrawerDoc.value?.id] as const,
+  ([visible, docId]) => {
+    if (visible && docId) {
+      loadTasks()
+    }
+    if (!visible) {
+      tasks.value = []
+    }
+  },
+)
 
 onMounted(loadDocuments)
 </script>
@@ -310,8 +407,17 @@ onMounted(loadDocuments)
         </el-table-column>
         <el-table-column prop="chunkCount" label="切片数" width="80" />
         <el-table-column prop="createdAt" label="上传时间" width="170" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="360" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="openTaskDrawer(row)">任务详情</el-button>
+            <el-button
+              v-if="row.status === 'FAILED'"
+              link
+              type="danger"
+              @click="openTaskDrawer(row, true)"
+            >
+              查看失败原因
+            </el-button>
             <el-button link type="primary" @click="openTagDialog(row)">编辑标签</el-button>
             <el-button
               v-if="row.status === 'READY'"
@@ -403,6 +509,55 @@ onMounted(loadDocuments)
         <el-button type="primary" :loading="tagSaving" @click="saveTags">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="taskDrawerVisible"
+      title="任务详情"
+      size="520px"
+      destroy-on-close
+      @close="closeTaskDrawer"
+    >
+      <div v-if="taskDrawerDoc?.originalName" class="task-doc-name">
+        文档：{{ taskDrawerDoc.originalName }}
+      </div>
+      <el-alert
+        :closable="false"
+        :type="taskDisplayState === 'failed' ? 'error' : 'info'"
+        show-icon
+      >
+        {{ taskStateHint }}
+      </el-alert>
+      <el-skeleton v-if="taskLoading" :rows="6" animated style="margin-top: 16px" />
+      <el-empty v-else-if="!tasks.length" description="暂无任务记录" style="margin-top: 24px" />
+      <div v-else class="task-list">
+        <div
+          v-for="task in tasks"
+          :key="task.id"
+          class="task-card"
+          :class="{ highlighted: isTaskHighlighted(task) }"
+        >
+          <div class="task-head">
+            <strong>{{ taskTypeLabel(task.taskType) }}</strong>
+            <el-tag
+              size="small"
+              :type="task.taskStatus === 'FAILED' ? 'danger' : task.taskStatus === 'SUCCESS' ? 'success' : 'info'"
+            >
+              {{ taskStatusLabel(task.taskStatus) }}
+            </el-tag>
+          </div>
+          <dl class="task-meta">
+            <div><dt>触发来源</dt><dd>{{ task.triggerSource || '-' }}</dd></div>
+            <div><dt>处理进度</dt><dd>{{ task.progress ?? 0 }}%</dd></div>
+            <div><dt>重试次数</dt><dd>{{ task.retryCount ?? 0 }}</dd></div>
+            <div><dt>失败阶段</dt><dd>{{ task.errorStage || '-' }}</dd></div>
+            <div class="full"><dt>失败原因</dt><dd>{{ task.errorMessage || '-' }}</dd></div>
+            <div><dt>创建时间</dt><dd>{{ task.createdAt || '-' }}</dd></div>
+            <div><dt>开始时间</dt><dd>{{ task.startedAt || '-' }}</dd></div>
+            <div><dt>结束时间</dt><dd>{{ task.finishedAt || '-' }}</dd></div>
+          </dl>
+        </div>
+      </div>
+    </el-drawer>
 
     <el-dialog v-model="chunkDialogVisible" title="切片详情" width="720px">
       <el-skeleton v-if="chunkLoading" :rows="5" animated />
@@ -515,5 +670,63 @@ onMounted(loadDocuments)
   word-break: break-word;
   font-family: inherit;
   font-size: 13px;
+}
+
+.task-doc-name {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+
+.task-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-card {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.task-card.highlighted {
+  border-color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.task-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.task-meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.task-meta div {
+  min-width: 0;
+}
+
+.task-meta div.full {
+  grid-column: 1 / -1;
+}
+
+.task-meta dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.task-meta dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  word-break: break-word;
 }
 </style>

@@ -25,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 文档模块 REST 接口。
@@ -79,6 +80,11 @@ public class DocumentController {
     @GetMapping("/documents/{id}")
     public ApiResponse<KmDocument> getDocument(@PathVariable Long id) {
         return ApiResponse.success(documentService.getDocument(id));
+    }
+
+    @GetMapping("/documents/{id}/tasks")
+    public ApiResponse<List<Map<String, Object>>> listDocumentTasks(@PathVariable Long id) {
+        return ApiResponse.success(documentService.listDocumentTasks(id));
     }
 
     @PutMapping("/documents/{id}/tags")

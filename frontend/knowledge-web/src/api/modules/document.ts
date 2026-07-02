@@ -1,6 +1,22 @@
 import { del, get, post, put } from '@/api/request'
 import type { DocumentChunk, DocumentItem, PageResult } from '@/types/knowledge'
 
+/** 文档处理任务（GET /documents/{docId}/tasks） */
+export interface DocumentTask {
+  id: number
+  docId: number
+  taskType: string
+  triggerSource?: string
+  taskStatus: 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED' | string
+  progress?: number
+  errorStage?: string
+  errorMessage?: string
+  retryCount?: number
+  createdAt?: string
+  startedAt?: string
+  finishedAt?: string
+}
+
 /**
  * 文档分页列表。
  * v4 计划：保留程雨彤原代码风格，调用方直接拿 records（不关心 envelope）。
@@ -34,7 +50,7 @@ export function updateDocumentTags(docId: number, tags: string[]) {
   return put<void>(`/documents/${docId}/tags`, { tags: normalizeTags(tags) }).then((r) => r.data)
 }
 
-/** US3.7 删除单个文档（逻辑删除 → 回收站，向量同步失效） */
+/** US3.7 删除单个文档（逻辑删除 → 回收站；R3 检索侧靠 is_deleted 过滤） */
 export function deleteDocument(docId: number) {
   return del<void>(`/documents/${docId}`).then((r) => r.data)
 }
@@ -42,6 +58,11 @@ export function deleteDocument(docId: number) {
 /** 批量删除文档 */
 export function batchDeleteDocuments(ids: number[]) {
   return post<void>('/documents/batch-delete', ids).then((r) => r.data)
+}
+
+/** 查询文档处理任务历史（P1-2：按需加载，避免列表 N+1） */
+export function fetchDocumentTasks(docId: number) {
+  return get<DocumentTask[]>(`/documents/${docId}/tasks`).then((r) => r.data)
 }
 
 /** 下载原文 */
@@ -62,9 +83,7 @@ export function restoreDocument(docId: number) {
 }
 
 /**
- * 永久删除。
- * R8：当前 v4 阶段 Worker MinIO 删除未就绪，后端会创建 PURGE 任务由 Worker 异步清理。
- * 前端入口仍保留；UI 层在 DocumentList 阶段可考虑隐藏按钮，由提交方决定。
+ * 永久删除：创建 PURGE 任务，由 Worker 异步清理 MinIO 与向量。
  */
 export function permanentDeleteDocument(docId: number) {
   return del<void>(`/documents/${docId}/permanent`).then((r) => r.data)

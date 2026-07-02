@@ -6,6 +6,7 @@ import com.km.admin.document.entity.KmDocument;
 import com.km.admin.document.infrastructure.MinioClientAdapter;
 import com.km.admin.document.mapper.DocumentManageMapper;
 import com.km.admin.document.mapper.DocumentTagMapper;
+import com.km.admin.knowledgebase.mapper.KnowledgeBaseMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,8 +19,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -43,6 +46,7 @@ public class DocumentService {
     private final MinioClientAdapter minioClientAdapter;
     private final RecycleBinService recycleBinService;
     private final DocumentTaskFacade documentTaskFacade;
+    private final KnowledgeBaseMapper knowledgeBaseMapper;
 
     @Value("${km.upload.max-file-size-mb:50}")
     private long maxFileSizeMb;
@@ -57,12 +61,14 @@ public class DocumentService {
                            DocumentTagMapper documentTagMapper,
                            MinioClientAdapter minioClientAdapter,
                            RecycleBinService recycleBinService,
-                           DocumentTaskFacade documentTaskFacade) {
+                           DocumentTaskFacade documentTaskFacade,
+                           KnowledgeBaseMapper knowledgeBaseMapper) {
         this.documentMapper = documentMapper;
         this.documentTagMapper = documentTagMapper;
         this.minioClientAdapter = minioClientAdapter;
         this.recycleBinService = recycleBinService;
         this.documentTaskFacade = documentTaskFacade;
+        this.knowledgeBaseMapper = knowledgeBaseMapper;
     }
 
     public PageResult<KmDocument> listDocuments(Long kbId, String status, String keyword,
@@ -85,8 +91,7 @@ public class DocumentService {
             throw new IllegalArgumentException("文档不存在");
         }
         List<String> tags = documentTagMapper.selectTagNamesByDocId(id);
-        // 一次性塞进对象里
-        // (KmDocument 实体没有 tags 字段，调用方按 docId 重新查)
+        doc.setTags(tags);
         return doc;
     }
 
@@ -133,6 +138,8 @@ public class DocumentService {
 
             uploaded.add(document);
 
+            documentCountOnCreated(kbId);
+
             // R6：上传成功后创建 PROCESS 任务（同进程跨子包调 facade）
             if (document.getId() != null && uploaderUserId != null) {
                 documentTaskFacade.createProcessTask(document.getId(), uploaderUserId);
@@ -177,6 +184,7 @@ public class DocumentService {
         if (affected == 0) {
             throw new IllegalStateException("文档删除失败，请刷新后重试");
         }
+        documentCountOnLogicDeleted(doc.getKbId());
     }
 
     /**
@@ -204,11 +212,31 @@ public class DocumentService {
         if (affected != uniqueIds.size()) {
             throw new IllegalStateException("部分文档删除失败，请刷新后重试");
         }
+        for (Long docId : uniqueIds) {
+            KmDocument doc = documentMapper.selectById(docId);
+            if (doc != null) {
+                documentCountOnLogicDeleted(doc.getKbId());
+            }
+        }
     }
 
     public InputStream downloadDocument(Long docId) throws Exception {
         KmDocument doc = getDocument(docId);
         return minioClientAdapter.download(doc.getFilePath());
+    }
+
+    /** P1-2：按需查询文档处理任务，避免列表 N+1。 */
+    public List<Map<String, Object>> listDocumentTasks(Long docId) {
+        getDocument(docId);
+        List<Map<String, Object>> rows = documentMapper.selectTasksByDocId(docId);
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        if (rows == null) {
+            return result;
+        }
+        for (Map<String, Object> row : rows) {
+            result.add(toTaskPayload(row));
+        }
+        return result;
     }
 
     /**
@@ -319,9 +347,73 @@ public class DocumentService {
     private void enrichTags(List<KmDocument> records) {
         for (KmDocument doc : records) {
             if (doc != null && doc.getId() != null) {
-                List<String> tags = documentTagMapper.selectTagNamesByDocId(doc.getId());
-                // tags 单独 query，调用方需要时自己取
+                doc.setTags(documentTagMapper.selectTagNamesByDocId(doc.getId()));
             }
         }
+    }
+
+    private void documentCountOnCreated(Long kbId) {
+        if (kbId != null) {
+            knowledgeBaseMapper.incrementDocumentCount(kbId);
+        }
+    }
+
+    private void documentCountOnLogicDeleted(Long kbId) {
+        if (kbId != null) {
+            knowledgeBaseMapper.decrementDocumentCount(kbId);
+        }
+    }
+
+    private Map<String, Object> toTaskPayload(Map<String, Object> row) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("id", toLong(row.get("id")));
+        payload.put("docId", toLong(firstNonNull(row.get("doc_id"), row.get("docId"))));
+        payload.put("taskType", toString(firstNonNull(row.get("task_type"), row.get("taskType"))));
+        payload.put("triggerSource", toString(firstNonNull(row.get("trigger_source"), row.get("triggerSource"))));
+        payload.put("taskStatus", toString(firstNonNull(row.get("task_status"), row.get("taskStatus"))));
+        payload.put("progress", toInteger(row.get("progress")));
+        payload.put("errorStage", toString(firstNonNull(row.get("error_stage"), row.get("errorStage"))));
+        payload.put("errorMessage", toString(firstNonNull(row.get("error_message"), row.get("errorMessage"))));
+        payload.put("retryCount", toInteger(firstNonNull(row.get("retry_count"), row.get("retryCount"))));
+        payload.put("createdAt", toString(firstNonNull(row.get("created_at"), row.get("createdAt"))));
+        payload.put("startedAt", toString(firstNonNull(row.get("started_at"), row.get("startedAt"))));
+        payload.put("finishedAt", toString(firstNonNull(row.get("finished_at"), row.get("finishedAt"))));
+        return payload;
+    }
+
+    private Object firstNonNull(Object primary, Object fallback) {
+        return primary != null ? primary : fallback;
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String toString(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 }
