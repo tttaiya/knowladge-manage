@@ -59,13 +59,23 @@
                c.chunk_type as chunkType,
                c.char_count as charCount,
                c.vector_id as vectorId,
-               c.vector_status as vectorStatus
+               c.vector_status as vectorStatus,
+               c.is_active as isActive
         from km_document_chunk c
         join km_document d
           on d.id = c.doc_id
         where c.id = #{chunkId}
-          and c.is_active = 1
+          and (
+            c.is_active = 1
+            or c.version_no = (
+              select max(v.version_no)
+              from km_document_version v
+              where v.doc_id = c.doc_id
+                and v.version_status = 'PENDING_REVIEW'
+            )
+          )
           and d.is_deleted = 0
+        for update
     </select>
 
     <update id="updateChunkContent">
@@ -77,7 +87,6 @@
             vector_status = 'PENDING',
             updated_at = now()
         where id = #{chunkId}
-          and is_active = 1
     </update>
 
 </mapper>

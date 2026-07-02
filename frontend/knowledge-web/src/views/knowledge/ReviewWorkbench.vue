@@ -120,6 +120,31 @@
             title="存在未完成向量化的分块，暂不能审核通过"
           />
 
+          <section class="records-panel">
+            <div class="panel-title">
+              <span>审核记录</span>
+              <el-button size="small" :loading="recordLoading" @click="loadReviewRecords">刷新</el-button>
+            </div>
+            <el-skeleton v-if="recordLoading && !reviewRecords.length" :rows="3" animated />
+            <el-empty v-else-if="!reviewRecords.length" description="暂无审核记录" />
+            <el-timeline v-else>
+              <el-timeline-item
+                v-for="record in reviewRecords"
+                :key="record.id"
+                :timestamp="record.createdAt"
+                placement="top"
+              >
+                <div class="record-item">
+                  <el-tag :type="record.action === 'APPROVE' ? 'success' : 'danger'" size="small">
+                    {{ reviewActionLabel(record.action) }}
+                  </el-tag>
+                  <span>{{ record.operatorName || record.operatorUserId || '未知操作人' }}</span>
+                  <p v-if="record.comment">{{ record.comment }}</p>
+                </div>
+              </el-timeline-item>
+            </el-timeline>
+          </section>
+
           <el-table :data="detail.chunks" border class="chunk-table" row-key="chunkId">
             <el-table-column prop="chunkIndex" label="序号" width="72" />
             <el-table-column prop="chapterPath" label="标题路径" min-width="140" show-overflow-tooltip />
@@ -144,16 +169,43 @@
                 <pre class="chunk-content">{{ row.content }}</pre>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="92" fixed="right">
+            <el-table-column label="操作" width="280" fixed="right">
               <template #default="{ row }">
-                <el-button
-                  type="primary"
-                  size="small"
-                  :disabled="detail.status !== 'PENDING_REVIEW'"
-                  @click="openEdit(row)"
-                >
-                  编辑
-                </el-button>
+                <div class="chunk-actions">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :disabled="detail.status !== 'PENDING_REVIEW'"
+                    @click="openEdit(row)"
+                  >
+                    编辑
+                  </el-button>
+                  <el-button
+                    size="small"
+                    :loading="chunkOperatingId === row.chunkId"
+                    :disabled="detail.status !== 'PENDING_REVIEW'"
+                    @click="splitChunk(row)"
+                  >
+                    拆分
+                  </el-button>
+                  <el-button
+                    size="small"
+                    :loading="chunkOperatingId === row.chunkId"
+                    :disabled="detail.status !== 'PENDING_REVIEW' || isLastChunk(row)"
+                    @click="mergeWithNext(row)"
+                  >
+                    合并下一块
+                  </el-button>
+                  <el-button
+                    type="danger"
+                    size="small"
+                    :loading="chunkOperatingId === row.chunkId"
+                    :disabled="detail.status !== 'PENDING_REVIEW' || detail.chunks.length <= 1"
+                    @click="deleteChunk(row)"
+                  >
+                    删除
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -176,13 +228,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import ReviewChunkEditor from '@/components/knowledge/ReviewChunkEditor.vue'
 import {
   approveReviewDocument,
+  deleteReviewChunk,
+  fetchReviewRecords,
   fetchPendingReviewDocuments,
   fetchReviewDocumentDetail,
+  mergeReviewChunkWithNext,
   rejectReviewDocument,
+  splitReviewChunk,
   updateReviewChunk,
   type PendingReviewDocument,
   type ReviewChunk,
   type ReviewDocumentDetail,
+  type ReviewRecord,
 } from '@/api/modules/review'
 
 const documents = ref<PendingReviewDocument[]>([])
@@ -194,6 +251,9 @@ const reviewSubmitting = ref(false)
 const editSubmitting = ref(false)
 const editVisible = ref(false)
 const editChunk = ref<ReviewChunk | null>(null)
+const reviewRecords = ref<ReviewRecord[]>([])
+const recordLoading = ref(false)
+const chunkOperatingId = ref<number | null>(null)
 const rejectReason = ref('')
 const approveComment = ref('')
 const kbIdFilter = ref('')
@@ -238,6 +298,7 @@ async function selectDocument(docId: number) {
   selectedDocId.value = docId
   rejectReason.value = ''
   approveComment.value = ''
+  reviewRecords.value = []
   await refreshDetail()
 }
 
@@ -246,10 +307,23 @@ async function refreshDetail() {
   detailLoading.value = true
   try {
     detail.value = await fetchReviewDocumentDetail(selectedDocId.value)
+    await loadReviewRecords()
   } catch (error) {
     ElMessage.error(errorMessage(error, '加载文档详情失败'))
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function loadReviewRecords() {
+  if (!selectedDocId.value) return
+  recordLoading.value = true
+  try {
+    reviewRecords.value = await fetchReviewRecords(selectedDocId.value)
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '加载审核记录失败'))
+  } finally {
+    recordLoading.value = false
   }
 }
 
@@ -325,10 +399,75 @@ async function submitChunkEdit(content: string) {
   }
 }
 
+async function splitChunk(row: ReviewChunk) {
+  const defaultSplit = Math.max(1, Math.floor((row.content || '').length / 2))
+  let splitAt: number
+  try {
+    const result = await ElMessageBox.prompt('请输入拆分位置（按字符序号，从 1 开始）', '拆分切片', {
+      inputValue: String(defaultSplit),
+      inputPattern: /^[1-9]\d*$/,
+      inputErrorMessage: '请输入正整数',
+    })
+    splitAt = Number(result.value)
+  } catch {
+    return
+  }
+  if (!Number.isFinite(splitAt) || splitAt <= 0 || splitAt >= row.content.length) {
+    ElMessage.warning('拆分位置必须在正文范围内')
+    return
+  }
+  await runChunkOperation(row.chunkId, '切片已拆分，相关切片将重新向量化', () =>
+    splitReviewChunk(row.chunkId, splitAt),
+  )
+}
+
+async function mergeWithNext(row: ReviewChunk) {
+  try {
+    await ElMessageBox.confirm('确认将该切片与下一切片合并？合并后的切片将重新向量化。', '合并切片', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  await runChunkOperation(row.chunkId, '切片已合并，合并后的切片将重新向量化', () =>
+    mergeReviewChunkWithNext(row.chunkId),
+  )
+}
+
+async function deleteChunk(row: ReviewChunk) {
+  try {
+    await ElMessageBox.confirm('确认删除该切片？删除后将重新排列后续切片序号。', '删除切片', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  await runChunkOperation(row.chunkId, '切片已删除', () => deleteReviewChunk(row.chunkId))
+}
+
+async function runChunkOperation(chunkId: number, successMessage: string, action: () => Promise<number>) {
+  chunkOperatingId.value = chunkId
+  try {
+    await action()
+    ElMessage.success(successMessage)
+    await refreshDetail()
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '切片操作失败'))
+  } finally {
+    chunkOperatingId.value = null
+  }
+}
+
 async function afterReviewChanged() {
   selectedDocId.value = null
   detail.value = null
+  reviewRecords.value = []
   await reloadList()
+}
+
+function isLastChunk(row: ReviewChunk) {
+  const chunks = detail.value?.chunks || []
+  return chunks.length > 0 && chunks[chunks.length - 1].chunkId === row.chunkId
 }
 
 function statusLabel(status: string) {
@@ -340,6 +479,14 @@ function statusLabel(status: string) {
     FAILED: '失败',
   }
   return map[status] || status
+}
+
+function reviewActionLabel(action: string) {
+  const map: Record<string, string> = {
+    APPROVE: '审核通过',
+    REJECT: '审核拒绝',
+  }
+  return map[action] || action
 }
 
 function parsedKbId() {
@@ -478,6 +625,16 @@ function errorMessage(error: unknown, fallback: string) {
   width: 100%;
 }
 
+.chunk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chunk-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
 .chunk-content {
   max-height: 110px;
   margin: 0;
@@ -485,6 +642,26 @@ function errorMessage(error: unknown, fallback: string) {
   word-break: break-word;
   font-family: inherit;
   color: var(--el-text-color-regular);
+}
+
+.records-panel {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.record-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-item p {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+  white-space: pre-wrap;
 }
 
 @media (max-width: 980px) {

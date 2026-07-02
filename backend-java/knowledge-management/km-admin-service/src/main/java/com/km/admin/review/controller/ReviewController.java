@@ -4,11 +4,15 @@ import com.km.admin.review.common.PageResult;
 import com.km.admin.review.common.Result;
 import com.km.admin.review.dto.ApproveReviewRequest;
 import com.km.admin.review.dto.RejectReviewRequest;
+import com.km.admin.review.dto.SplitChunkRequest;
 import com.km.admin.review.dto.UpdateChunkRequest;
+import com.km.admin.review.entity.ReviewRecord;
+import com.km.admin.review.mapper.ReviewRecordMapper;
 import com.km.admin.review.service.ChunkEditService;
 import com.km.admin.review.service.ReviewService;
 import com.km.admin.review.vo.PendingReviewDocumentVO;
 import com.km.admin.review.vo.ReviewDocumentDetailVO;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,16 +23,22 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/reviews")
 public class ReviewController {
 
     private final ReviewService reviewService;
     private final ChunkEditService chunkEditService;
+    private final ReviewRecordMapper reviewRecordMapper;
 
-    public ReviewController(ReviewService reviewService, ChunkEditService chunkEditService) {
+    public ReviewController(ReviewService reviewService,
+                            ChunkEditService chunkEditService,
+                            ReviewRecordMapper reviewRecordMapper) {
         this.reviewService = reviewService;
         this.chunkEditService = chunkEditService;
+        this.reviewRecordMapper = reviewRecordMapper;
     }
 
     @GetMapping("/pending-documents")
@@ -63,6 +73,37 @@ public class ReviewController {
             return Result.fail(2010, "chunk not found");
         }
         return Result.success(updated);
+    }
+
+    @PostMapping("/chunks/{chunkId}/merge-next")
+    public Result<Integer> mergeChunkWithNext(@PathVariable Long chunkId,
+                                              @RequestHeader(value = "X-User-Id", required = false) String operatorUserId,
+                                              @RequestHeader(value = "X-User-Name", required = false) String operatorName) {
+        int updated = chunkEditService.mergeWithNext(chunkId, operatorUserId, operatorName);
+        return chunkOperationResult(updated);
+    }
+
+    @PostMapping("/chunks/{chunkId}/split")
+    public Result<Integer> splitChunk(@PathVariable Long chunkId,
+                                      @RequestBody SplitChunkRequest request,
+                                      @RequestHeader(value = "X-User-Id", required = false) String operatorUserId,
+                                      @RequestHeader(value = "X-User-Name", required = false) String operatorName) {
+        int updated = chunkEditService.splitChunk(
+                chunkId, request == null ? null : request.getSplitAt(), operatorUserId, operatorName);
+        return chunkOperationResult(updated);
+    }
+
+    @DeleteMapping("/chunks/{chunkId}")
+    public Result<Integer> deleteChunk(@PathVariable Long chunkId,
+                                       @RequestHeader(value = "X-User-Id", required = false) String operatorUserId,
+                                       @RequestHeader(value = "X-User-Name", required = false) String operatorName) {
+        int updated = chunkEditService.deleteChunk(chunkId, operatorUserId, operatorName);
+        return chunkOperationResult(updated);
+    }
+
+    @GetMapping("/documents/{docId}/records")
+    public Result<List<ReviewRecord>> getReviewRecords(@PathVariable Long docId) {
+        return Result.success(reviewRecordMapper.selectByDocId(docId));
     }
 
     @PostMapping("/documents/{docId}/approve")
@@ -103,6 +144,25 @@ public class ReviewController {
         }
         if (updated == -1) {
             return Result.fail(2004, "document status not allowed");
+        }
+        return Result.success(updated);
+    }
+
+    private Result<Integer> chunkOperationResult(int updated) {
+        if (updated == -1) {
+            return Result.fail(1001, "invalid chunk operation parameter");
+        }
+        if (updated == -3) {
+            return Result.fail(401, "missing user context");
+        }
+        if (updated == -4) {
+            return Result.fail(2011, "next chunk not found");
+        }
+        if (updated == -5) {
+            return Result.fail(2012, "cannot delete the only chunk");
+        }
+        if (updated == 0) {
+            return Result.fail(2010, "chunk not found");
         }
         return Result.success(updated);
     }

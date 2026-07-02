@@ -1,4 +1,4 @@
-import { get, patch, post } from '@/api/request'
+import { del, get, patch, post } from '@/api/request'
 import type { PageResult } from '@/types/knowledge'
 
 export interface PendingReviewDocument {
@@ -36,6 +36,16 @@ export interface ReviewDocumentDetail {
   chunks: ReviewChunk[]
 }
 
+export interface ReviewRecord {
+  id: number
+  docId: number
+  action: string
+  comment?: string
+  operatorUserId?: string
+  operatorName?: string
+  createdAt?: string
+}
+
 function unwrap<T>(promise: Promise<{ code: number; message: string; data: T }>) {
   return promise.then((res) => {
     if (res.code !== 0) {
@@ -63,4 +73,20 @@ export function rejectReviewDocument(docId: number, reason: string) {
 
 export function updateReviewChunk(chunkId: number, content: string) {
   return unwrap(patch<number>(`/reviews/chunks/${chunkId}`, { content }))
+}
+
+export function mergeReviewChunkWithNext(chunkId: number) {
+  return unwrap(post<number>(`/reviews/chunks/${chunkId}/merge-next`))
+}
+
+export function splitReviewChunk(chunkId: number, splitAt: number) {
+  return unwrap(post<number>(`/reviews/chunks/${chunkId}/split`, { splitAt }))
+}
+
+export function deleteReviewChunk(chunkId: number) {
+  return unwrap(del<number>(`/reviews/chunks/${chunkId}`))
+}
+
+export function fetchReviewRecords(docId: number) {
+  return unwrap(get<ReviewRecord[]>(`/reviews/documents/${docId}/records`))
 }
