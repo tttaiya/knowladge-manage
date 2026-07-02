@@ -20,6 +20,7 @@
           <el-menu-item index="/search">知识检索</el-menu-item>
           <el-menu-item index="/config">系统配置</el-menu-item>
           <el-menu-item index="/statistics">数据统计</el-menu-item>
+          <el-menu-item index="/reports">报告生成</el-menu-item>
         </el-menu>
       </el-aside>
 
@@ -45,6 +46,7 @@ const activeMenu = computed(() => {
   if (path.startsWith('/search')) return '/search'
   if (path.startsWith('/config')) return '/config'
   if (path.startsWith('/statistics')) return '/statistics'
+  if (path.startsWith('/reports')) return '/reports'
   return path
 })
 

@@ -37,6 +37,9 @@ services:
       # F5：REEMBED 内容版本
       - ../../sql/V6__f5_reembed_content_version.sql:/docker-entrypoint-initdb.d/14_V6__f5_reembed_content_version.sql:ro
 
+      # 报告生成模块
+      - ../../sql/V8__report_generation_module.sql:/docker-entrypoint-initdb.d/15_V8__report_generation_module.sql:ro
+
       - ../../sql/init-demo.sql:/docker-entrypoint-initdb.d/99_init_demo.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ukm", "-pkm123456"]
@@ -310,6 +313,40 @@ services:
     networks:
       - km-net
 
+  km-report-service:
+    build:
+      context: ../..
+      dockerfile: backend-java/knowledge-management/km-report-service/Dockerfile
+    container_name: km-report-service
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: km
+      MYSQL_USERNAME: km
+      MYSQL_PASSWORD: km123456
+      NACOS_ADDR: nacos:8848
+      REPORT_EXPORT_BASE_DIR: /data/report-files
+      REPORT_LLM_ENABLED: ${REPORT_LLM_ENABLED:-false}
+      REPORT_LLM_BASE_URL: ${REPORT_LLM_BASE_URL:-}
+      REPORT_LLM_MODEL: ${REPORT_LLM_MODEL:-}
+      REPORT_LLM_API_KEY: ${REPORT_LLM_API_KEY:-}
+    volumes:
+      - report-files:/data/report-files
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_started
+    ports:
+      - "9104:9104"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9104/actuator/health | grep UP"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+    networks:
+      - km-net
+
   super-biz-agent-service:
     build:
       context: ../..
@@ -344,11 +381,14 @@ services:
       NACOS_ADDR: nacos:8848
       KM_ADMIN_URI: http://km-admin-service:9101
       KM_SEARCH_URI: http://km-search-service:9103
+      KM_REPORT_URI: http://km-report-service:9104
       SUPER_BIZ_AGENT_URI: http://super-biz-agent-service:9900
     depends_on:
       km-admin-service:
         condition: service_healthy
       km-search-service:
+        condition: service_healthy
+      km-report-service:
         condition: service_healthy
       super-biz-agent-service:
         condition: service_healthy
@@ -404,6 +444,7 @@ volumes:
   minio-data:
   chroma-data:
   super-biz-agent-data:
+  report-files:
   # F4 整合（commit #25）：task-files 命名卷（Worker 写 / FastAPI 读）
   task-files:
 

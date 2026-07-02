@@ -60,6 +60,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/knowledge/StatisticsPage.vue'),
   },
   {
+    path: '/reports',
+    name: 'ReportWorkspace',
+    component: () => import('@/views/report/ReportWorkspace.vue'),
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/knowledge/NotFound.vue'),

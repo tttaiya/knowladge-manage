@@ -11,6 +11,7 @@
         <module>knowledge-management/km-admin-service</module>
         <module>knowledge-management/km-worker-service</module>
         <module>knowledge-management/km-search-service</module>
+        <module>knowledge-management/km-report-service</module>
         <module>gateway-service</module>
     </modules>
 
@@ -75,4 +76,3 @@
         </pluginManagement>
     </build>
 </project>
-

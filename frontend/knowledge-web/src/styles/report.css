@@ -1,0 +1,63 @@
+.report-workspace {
+  --pt-page-bg: #05090f;
+  --pt-page-bg-soft: #101a2d;
+  --pt-grid-color: rgba(61, 139, 255, 0.08);
+  --pt-text-primary: #e9f1ff;
+  --pt-text-secondary: #96a8c6;
+  --pt-text-muted: #5b6c8e;
+  --pt-brand: #37f2b1;
+  --pt-accent: #3d8bff;
+  --pt-danger: #ff6b81;
+  --pt-warning: #ffb755;
+  --pt-surface: rgba(255, 255, 255, 0.08);
+  --pt-surface-border: rgba(255, 255, 255, 0.25);
+  --pt-shadow-lg: 0 18px 45px rgba(11, 23, 44, 0.35);
+  --pt-shadow-lg-hover: 0 24px 55px rgba(11, 23, 44, 0.55);
+  --pt-shadow-sm: 0 8px 18px rgba(11, 23, 44, 0.3);
+  --pt-glow: 0 0 18px rgba(55, 242, 177, 0.55);
+  --el-color-primary: #37f2b1;
+  --el-color-success: #37f2b1;
+  --el-color-warning: #ffb755;
+  --el-color-danger: #ff6b81;
+  --el-text-color-primary: var(--pt-text-primary);
+  --el-text-color-secondary: var(--pt-text-secondary);
+  --el-border-color: rgba(255, 255, 255, 0.12);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.08);
+  --el-bg-color: rgba(10, 14, 24, 0.92);
+  --el-bg-color-overlay: rgba(10, 14, 24, 0.92);
+  position: relative;
+  min-height: calc(100vh - 32px);
+  color: var(--pt-text-primary);
+  background: radial-gradient(circle at top left, rgba(16, 26, 45, 0.94) 0%, rgba(5, 9, 15, 0.98) 55%, #02030a 100%);
+  font-family: "Inter", "Microsoft YaHei", "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+.report-workspace,
+.report-workspace * {
+  box-sizing: border-box;
+}
+
+.report-workspace .dark-input .el-input__wrapper,
+.report-workspace .dark-input .el-textarea__inner {
+  background: rgba(6, 13, 25, 0.72);
+  border: 1px solid rgba(80, 187, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.report-workspace .dark-input .el-input__inner,
+.report-workspace .dark-input .el-textarea__inner {
+  color: var(--pt-text-primary);
+}
+
+.report-workspace .dark-input .el-input__wrapper:hover,
+.report-workspace .dark-input .el-input__wrapper.is-focus {
+  border-color: rgba(61, 139, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(61, 139, 255, 0.22);
+}
+
+@media (max-width: 900px) {
+  .report-workspace .el-aside.app-aside {
+    width: 78px !important;
+  }
+}

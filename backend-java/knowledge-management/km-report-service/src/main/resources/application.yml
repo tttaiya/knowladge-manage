@@ -1,0 +1,42 @@
+server:
+  port: ${KM_REPORT_PORT:9104}
+
+spring:
+  application:
+    name: km-report-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:nacos:8848}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:knowledge}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+report:
+  export:
+    base-dir: ${REPORT_EXPORT_BASE_DIR:/tmp/report-files}
+    url-prefix: /api/v1/reports/files
+  llm:
+    enabled: ${REPORT_LLM_ENABLED:false}
+    base-url: ${REPORT_LLM_BASE_URL:}
+    model: ${REPORT_LLM_MODEL:}
+    timeout-seconds: ${REPORT_LLM_TIMEOUT_SECONDS:60}
+    max-input-chars: ${REPORT_LLM_MAX_INPUT_CHARS:12000}
+    max-output-tokens: ${REPORT_LLM_MAX_OUTPUT_TOKENS:2048}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

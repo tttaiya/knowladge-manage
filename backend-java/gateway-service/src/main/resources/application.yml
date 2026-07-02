@@ -23,6 +23,11 @@ spring:
                   /api/v1/stats/**,
                   /api/v1/recycle-bin/**,
                   /internal/km/**
+        # 报告生成服务
+        - id: km-report
+          uri: ${KM_REPORT_URI:http://km-report-service:9104}
+          predicates:
+            - Path=/api/v1/reports/**
         # 前台与跨组检索（search-service，独立保留）
         - id: km-search
           uri: ${KM_SEARCH_URI:http://km-search-service:9103}
