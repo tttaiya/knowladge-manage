@@ -1,7 +1,6 @@
 package com.km.report.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.km.report.common.context.LoginUserContext;
 import com.km.report.common.exception.BizException;
 import com.km.report.dto.AiGenerateRequest;
 import com.km.report.dto.AiGenerateResponse;
@@ -11,6 +10,7 @@ import com.km.report.entity.ReportRecord;
 import com.km.report.entity.ReportTemplate;
 import com.km.report.entity.ReportTemplateChapter;
 import com.km.report.service.ReportAiService;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportOutlineItemService;
 import com.km.report.service.ReportOutlineService;
 import com.km.report.service.ReportRecordService;
@@ -42,6 +42,8 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
     private ReportTemplateService reportTemplateService;
     @Resource
     private ReportAiService reportAiService;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @Override
     public Long createDraft(GenerateOutlineRequest request) {
@@ -57,11 +59,12 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
         record.setPowerPlant(request.getPowerPlant());
         record.setReportYear(request.getReportYear());
         record.setGenerationPrompt(request.getTheme());
+        record.setEnableKnowledgeRetrieval(request.getEnableKnowledgeRetrieval() == null ? 1 : request.getEnableKnowledgeRetrieval());
         record.setStatus(0);
         record.setExportStatus(0);
         record.setTotalChapter(0);
         record.setFinishedChapter(0);
-        record.setUserId(LoginUserContext.getUserId() == null ? 0L : LoginUserContext.getUserId());
+        record.setUserId(reportAccessService.currentUserId());
         record.setCreateTime(LocalDateTime.now());
         record.setUpdateTime(LocalDateTime.now());
         reportRecordService.save(record);
@@ -83,6 +86,7 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
 
     @Override
     public List<ReportOutlineItem> getOutline(Long reportId) {
+        reportAccessService.requireOwnedRecord(reportId);
         return orderOutlineItems(reportOutlineItemService.list(
                 new LambdaQueryWrapper<ReportOutlineItem>().eq(ReportOutlineItem::getReportId, reportId)
         ));
@@ -90,10 +94,7 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
 
     @Override
     public ReportOutlineItem getItem(Long itemId) {
-        ReportOutlineItem item = reportOutlineItemService.getById(itemId);
-        if (item == null) {
-            throw new BizException("大纲项不存在");
-        }
+        ReportOutlineItem item = reportAccessService.requireOwnedOutlineItem(itemId);
         return item;
     }
 
@@ -102,6 +103,7 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
         if (item == null || !StringUtils.hasText(item.getChapterTitle())) {
             throw new BizException("章节标题不能为空");
         }
+        reportAccessService.requireOwnedRecord(reportId);
         item.setId(null);
         item.setReportId(reportId);
         item.setEditable(item.getEditable() == null ? 1 : item.getEditable());
@@ -150,10 +152,7 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
 
     @Override
     public List<ReportOutlineItem> regenerateOutline(Long reportId) {
-        ReportRecord record = reportRecordService.getById(reportId);
-        if (record == null) {
-            throw new BizException("报告不存在");
-        }
+        ReportRecord record = reportAccessService.requireOwnedRecord(reportId);
         reportOutlineItemService.remove(new LambdaQueryWrapper<ReportOutlineItem>().eq(ReportOutlineItem::getReportId, reportId));
         List<ReportTemplateChapter> templateChapters = loadTemplateChapters(record.getTemplateId());
         List<ReportOutlineItem> outlineItems;
@@ -174,6 +173,7 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
         if (items == null) {
             throw new BizException("更新内容不能为空");
         }
+        reportAccessService.requireOwnedRecord(reportId);
         reportOutlineItemService.remove(new LambdaQueryWrapper<ReportOutlineItem>().eq(ReportOutlineItem::getReportId, reportId));
         for (ReportOutlineItem item : items) {
             item.setId(null);
@@ -205,6 +205,9 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
     @Override
     public List<ReportOutlineItem> moveItem(Long reportId, Long itemId, Integer sort, Long parentId) {
         ReportOutlineItem item = getItem(itemId);
+        if (!reportId.equals(item.getReportId())) {
+            throw new BizException("大纲项不属于该报告");
+        }
         item.setSort(sort == null ? item.getSort() : sort);
         item.setParentId(parentId == null ? 0L : parentId);
         item.setUpdateTime(LocalDateTime.now());
@@ -215,12 +218,16 @@ public class ReportOutlineServiceImpl implements ReportOutlineService {
 
     private Long resolveTemplateId(GenerateOutlineRequest request) {
         if (request.getTemplateId() != null) {
+            reportAccessService.requireVisibleTemplate(request.getTemplateId());
             return request.getTemplateId();
         }
         if (StringUtils.hasText(request.getReportType())) {
             ReportTemplate template = reportTemplateService.getOne(
                     new LambdaQueryWrapper<ReportTemplate>()
                             .eq(ReportTemplate::getReportType, request.getReportType())
+                            .and(w -> w.eq(ReportTemplate::getTemplateScope, "GLOBAL")
+                                    .or()
+                                    .eq(ReportTemplate::getCreatorId, reportAccessService.currentUserId()))
                             .orderByDesc(ReportTemplate::getStatus)
                             .orderByDesc(ReportTemplate::getId)
                             .last("LIMIT 1")

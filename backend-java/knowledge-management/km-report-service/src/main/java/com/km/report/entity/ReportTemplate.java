@@ -25,7 +25,7 @@ public class ReportTemplate {
     private String originalFileName;
     private String fileUrl;
     private Long fileSize;
-    private Long creatorId;
+    private String creatorId;
     @Version
     private Integer version;
     private String remark;

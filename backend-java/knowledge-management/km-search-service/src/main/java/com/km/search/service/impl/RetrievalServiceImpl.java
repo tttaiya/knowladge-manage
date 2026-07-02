@@ -55,7 +55,8 @@ public class RetrievalServiceImpl implements RetrievalService {
         List<Long> readyDocIds = retrievalMapper.selectReadyDocIds(
                 normalized.knowledgeBaseIds,
                 normalized.tags,
-                normalized.tags.size()
+                normalized.tags.size(),
+                normalized.userId
         );
         if (readyDocIds == null || readyDocIds.isEmpty()) {
             return emptyResponse(begin, normalized, null);
@@ -80,7 +81,7 @@ public class RetrievalServiceImpl implements RetrievalService {
         }
 
         List<ChunkDetailRecord> chunkDetails =
-                retrievalMapper.selectChunkDetailsByVectorIds(vectorIds);
+                retrievalMapper.selectChunkDetailsByVectorIds(vectorIds, normalized.userId);
         Map<String, ChunkDetailRecord> chunkMap =
                 new LinkedHashMap<String, ChunkDetailRecord>();
         if (chunkDetails != null) {
@@ -181,6 +182,7 @@ public class RetrievalServiceImpl implements RetrievalService {
 
         NormalizedRequest normalized = new NormalizedRequest();
         normalized.query = query;
+        normalized.userId = StringUtils.hasText(request.getUserId()) ? request.getUserId().trim() : null;
         normalized.knowledgeBaseIds = normalizeLongList(request.getKnowledgeBaseIds());
         normalized.tags = normalizeStringList(request.getTags());
         EffectivePolicy policy = resolveEffectivePolicy(normalized.knowledgeBaseIds, requestMode);
@@ -379,6 +381,7 @@ public class RetrievalServiceImpl implements RetrievalService {
         item.setChapterPath(detail.getChapterPath());
         item.setPageNo(detail.getPageNo());
         item.setChunkType(detail.getChunkType());
+        item.setVectorId(detail.getVectorId());
         item.setContent(detail.getContent());
         item.setSummary(buildSummary(detail.getContent(), query, 180));
         item.setSimilarityScore(candidate.normalizedSimilarity());
@@ -445,6 +448,7 @@ public class RetrievalServiceImpl implements RetrievalService {
 
     private static class NormalizedRequest {
         private String query;
+        private String userId;
         private List<Long> knowledgeBaseIds;
         private List<String> tags;
         private RetrievalMode mode;

@@ -5,6 +5,7 @@ import com.km.report.entity.ReportRecord;
 import com.km.report.entity.ReportTemplate;
 import com.km.report.mapper.ReportRecordMapper;
 import com.km.report.service.DashboardService;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportRecordService;
 import com.km.report.service.ReportTemplateService;
 import com.km.report.vo.DashboardOverviewVO;
@@ -29,26 +30,36 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Resource
     private ReportRecordMapper reportRecordMapper;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @Override
     public DashboardOverviewVO overview() {
         DashboardOverviewVO vo = new DashboardOverviewVO();
 
-        Long templateCount = reportTemplateService.count();
-        Long reportRecordCount = reportRecordService.count();
+        String userId = reportAccessService.currentUserId();
+        Long templateCount = reportTemplateService.count(new LambdaQueryWrapper<ReportTemplate>()
+                .and(w -> w.eq(ReportTemplate::getTemplateScope, "GLOBAL")
+                        .or()
+                        .eq(ReportTemplate::getCreatorId, userId)));
+        Long reportRecordCount = reportRecordService.count(new LambdaQueryWrapper<ReportRecord>()
+                .eq(ReportRecord::getUserId, userId));
 
         Long generatingRecordCount = reportRecordService.count(
                 new LambdaQueryWrapper<ReportRecord>()
+                        .eq(ReportRecord::getUserId, userId)
                         .eq(ReportRecord::getStatus, 0)
         );
 
         Long successRecordCount = reportRecordService.count(
                 new LambdaQueryWrapper<ReportRecord>()
+                        .eq(ReportRecord::getUserId, userId)
                         .eq(ReportRecord::getStatus, 1)
         );
 
         Long failedRecordCount = reportRecordService.count(
                 new LambdaQueryWrapper<ReportRecord>()
+                        .eq(ReportRecord::getUserId, userId)
                         .eq(ReportRecord::getStatus, 2)
         );
 
@@ -64,7 +75,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public List<ReportGenerateTrendVO> last30DaysTrend() {
-        List<ReportGenerateTrendVO> dbList = reportRecordMapper.selectLast30DaysTrend();
+        List<ReportGenerateTrendVO> dbList = reportRecordMapper.selectLast30DaysTrend(reportAccessService.currentUserId());
 
         Map<String, Long> dbMap = new LinkedHashMap<>();
         for (ReportGenerateTrendVO item : dbList) {

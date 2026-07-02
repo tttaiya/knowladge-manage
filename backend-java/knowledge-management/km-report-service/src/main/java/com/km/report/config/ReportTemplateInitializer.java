@@ -87,7 +87,7 @@ public class ReportTemplateInitializer implements CommandLineRunner {
         template.setStatus(1);
         template.setTemplateScope("GLOBAL");
         template.setChapterCount(0);
-        template.setCreatorId(0L);
+        template.setCreatorId("system");
         template.setCreateTime(LocalDateTime.now());
         template.setUpdateTime(LocalDateTime.now());
         template.setDeleted(0);

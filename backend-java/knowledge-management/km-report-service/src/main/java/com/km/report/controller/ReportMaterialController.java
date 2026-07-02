@@ -7,6 +7,7 @@ import com.km.report.dto.MaterialQueryDTO;
 import com.km.report.dto.UploadMaterialRequest;
 import com.km.report.entity.ReportMaterial;
 import com.km.report.service.ReportFileStorageService;
+import com.km.report.service.ReportAccessService;
 import com.km.report.service.ReportMaterialService;
 import com.km.report.vo.FileUploadVO;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,6 +35,8 @@ public class ReportMaterialController {
 
     @Resource
     private ReportExportProperties reportExportProperties;
+    @Resource
+    private ReportAccessService reportAccessService;
 
     @GetMapping("/page")
     public ApiResult<Page<ReportMaterial>> page(MaterialQueryDTO queryDTO) {
@@ -42,7 +45,7 @@ public class ReportMaterialController {
 
     @GetMapping("/{id}")
     public ApiResult<ReportMaterial> getById(@PathVariable Long id) {
-        return ApiResult.ok(reportMaterialService.getById(id));
+        return ApiResult.ok(reportAccessService.requireOwnedMaterial(id));
     }
 
     @PostMapping("/upload")
@@ -52,16 +55,19 @@ public class ReportMaterialController {
 
     @PostMapping("/{id}/parse")
     public ApiResult<ReportMaterial> parse(@PathVariable Long id) {
+        reportAccessService.requireOwnedMaterial(id);
         return ApiResult.ok(reportMaterialService.parseMaterial(id));
     }
 
     @DeleteMapping("/{id}")
     public ApiResult<Boolean> delete(@PathVariable Long id) {
+        reportAccessService.requireOwnedMaterial(id);
         return ApiResult.ok(reportMaterialService.removeById(id));
     }
 
     @PostMapping("/images")
     public ApiResult<FileUploadVO> uploadImage(@RequestParam("file") MultipartFile file) {
+        reportAccessService.currentUserId();
         return ApiResult.ok(reportFileStorageService.store(file, reportExportProperties.getImageDir()));
     }
 

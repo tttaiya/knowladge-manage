@@ -23,11 +23,13 @@ public class ReportMaterial {
     private String originalFileName;
     private String fileUrl;
     private String filePath;
+    private String bucket;
+    private String objectKey;
     private String fileExt;
     private Long fileSize;
     private String parseStatus;
     private String structuredData;
-    private Long creatorId;
+    private String creatorId;
     private String remark;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

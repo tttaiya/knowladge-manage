@@ -12,6 +12,7 @@ public class RetrievalSearchRequest {
     private Double similarityThreshold;
     private Integer rerankTopN;
     private Double rerankThreshold;
+    private String userId;
 
     public String getQuery() {
         return query;
@@ -75,6 +76,14 @@ public class RetrievalSearchRequest {
 
     public void setRerankThreshold(Double rerankThreshold) {
         this.rerankThreshold = rerankThreshold;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 }
 
