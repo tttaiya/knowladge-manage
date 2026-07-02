@@ -9,7 +9,8 @@ services:
       MYSQL_PASSWORD: km123456
       TZ: Asia/Shanghai
     ports:
-      - "3306:3306"
+      # 本机 3306/33060 被 MySQL80 占用，改映射 33306 -> 容器 3306
+      - "33306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ../../sql/knowledge-base.sql:/docker-entrypoint-initdb.d/01_knowledge_base.sql:ro
@@ -79,24 +80,20 @@ services:
     image: nacos/nacos-server:v2.2.0
     container_name: km-nacos
     environment:
+      # demo 模式：去掉 mysql datasource，改用 nacos 自带内嵌 derby，避免缺 nacos schema 启动失败
       MODE: standalone
-      SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: mysql
-      MYSQL_SERVICE_DB_NAME: km
-      MYSQL_SERVICE_USER: km
-      MYSQL_SERVICE_PASSWORD: km123456
-      MYSQL_SERVICE_PORT: 3306
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
     ports:
       - "8848:8848"
       - "9848:9848"
-    depends_on:
-      mysql:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/actuator/health | grep UP"]
       interval: 15s
       timeout: 5s
       retries: 30
+      start_period: 30s
     networks:
       - km-net
 
@@ -113,10 +110,12 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # minio 镜像里没有 curl/wget，改用 bash + /dev/tcp 自检 S3 端口
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/9000 && echo -e \"GET /minio/health/live HTTP/1.0\\r\\n\\r\\n\" >&3'"]
       interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 30
+      start_period: 20s
     networks:
       - km-net
 

@@ -86,19 +86,19 @@ export function listKnowledgeBases(params: {
   pageNum?: number
   pageSize?: number
 }): Promise<Envelope<PageResult<KnowledgeBaseVO>>> {
-  return request.get('/admin/knowledge-bases', { params })
+  return request.get('/knowledge-bases', { params })
 }
 
 /** 详情 */
 export function getKnowledgeBaseDetail(id: number): Promise<Envelope<KnowledgeBaseDetailVO>> {
-  return request.get(`/admin/knowledge-bases/${id}`)
+  return request.get(`/knowledge-bases/${id}`)
 }
 
 /** 创建 */
 export function createKnowledgeBase(
   payload: CreateKnowledgeBaseRequest,
 ): Promise<Envelope<KnowledgeBaseVO>> {
-  return request.post('/admin/knowledge-bases', payload)
+  return request.post('/knowledge-bases', payload)
 }
 
 /** 更新 */
@@ -109,24 +109,24 @@ export function updateKnowledgeBase(
 ): Promise<Envelope<KnowledgeBaseVO>> {
   const headers: Record<string, string> = {}
   if (confirmation !== undefined) headers['X-Confirmation'] = String(confirmation)
-  return request.put(`/admin/knowledge-bases/${id}`, payload, { headers })
+  return request.put(`/knowledge-bases/${id}`, payload, { headers })
 }
 
 /** 单个删除 */
 export function deleteKnowledgeBase(id: number): Promise<Envelope<null>> {
-  return request.delete(`/admin/knowledge-bases/${id}`)
+  return request.delete(`/knowledge-bases/${id}`)
 }
 
 /** 批量删除 */
 export function batchDeleteKnowledgeBases(
   knowledgeBaseIds: number[],
 ): Promise<Envelope<null>> {
-  return request.post('/admin/knowledge-bases/batch-delete', { knowledgeBaseIds })
+  return request.post('/knowledge-bases/batch-delete', { knowledgeBaseIds })
 }
 
 /** 策略变更（reprocess） */
 export function reprocessKnowledgeBase(
   id: number,
 ): Promise<Envelope<ReprocessResultVO>> {
-  return request.post(`/admin/knowledge-bases/${id}/reprocess`)
+  return request.post(`/knowledge-bases/${id}/reprocess`)
 }
